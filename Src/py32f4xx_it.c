@@ -34,6 +34,8 @@
 #include "usb_py32_reg.h"
 
 /* Private includes ----------------------------------------------------------*/
+#include "ltx.h"
+#include "ltx_log.h"
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
@@ -61,6 +63,7 @@ void NMI_Handler(void)
  */
 void HardFault_Handler(void)
 {
+    LTX_LOG_STR("\n\n?!HF!?\n\n");
     /* Go to infinite loop when Hard Fault exception occurs */
     while (1)
     {
@@ -131,6 +134,7 @@ void DebugMon_Handler(void)
  */
 void PendSV_Handler(void)
 {
+    ltx_Sys_scheduler();
 }
 
 /**
@@ -141,6 +145,8 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
     HAL_IncTick();
+
+    ltx_Sys_tick_tack();
 }
 
 /******************************************************************************/

@@ -31,13 +31,19 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "usb_config.h"
+
+#include "ltx.h"
+#include "ltx_log.h"
+#include "ltx_app.h"
+#include "myAPP_system.h"
+#include "myAPP_device_init.h"
 /* Private define ------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 /* Private user code ---------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private function prototypes -----------------------------------------------*/
-static void APP_SystemClockConfig(void);
-static void APP_USBInit(void);
+static void sys_init_clock(void);
+static void sys_init_usb(void);
 /**
  * @brief  Main program.
  * @retval int
@@ -47,11 +53,46 @@ int main(void)
     /* Reset of all peripherals, Initializes the Systick */
     HAL_Init();
 
+    ltx_Log_init();
+    LTX_LOG_STR("\n\nSYSTEM START\n\n");
+
     /* System clock configuration */
-    APP_SystemClockConfig();
+    sys_init_clock();
+
+    #ifdef ltx_cfg_USE_IDLE_TASK
+    // 如果需要空闲任务能力，那么需要将软中断设置为最低优先级，并且确保 systick 中断优先级比它更高
+    HAL_NVIC_SetPriority(SysTick_IRQn, 6, 0U);
+    HAL_NVIC_SetPriority(PendSV_IRQn, 7, 0U);
+    #endif
+
+    // 创建系统 app 并运行
+    ltx_App_init(&app_system);
+    ltx_App_resume(&app_system);
+    
+    // 创建外部硬件初始化 app 并运行
+    // ltx_App_init(&app_device_init);
+    // ltx_App_resume(&app_device_init);
+    
+    // 启动调度器
+    #ifndef ltx_cfg_USE_IDLE_TASK
+    // 不开启空闲任务功能，则直接在主循环运行调度器
+    LTX_LOG_INFO("Start scheduler...\n");
+    ltx_Sys_scheduler();
+    #endif
+    // 开启空闲休眠，调度器需要放到 pendsv
+
+    // 运行空闲任务
+    LTX_LOG_INFO("Start idle task...\n");
+    while (1){
+        // 进入休眠
+        // __DSB();
+        __WFI();
+    }
+
+
 
     /* Initialize USB peripheral */
-    APP_USBInit();
+    sys_init_usb();
 
     /* Infinite loop */
     while (1)
@@ -69,7 +110,7 @@ int main(void)
  * @param  None
  * @retval None
  */
-static void APP_USBInit(void)
+static void sys_init_usb(void)
 {
     __HAL_RCC_SYSCFG_CLK_ENABLE();
 
@@ -87,7 +128,7 @@ static void APP_USBInit(void)
  * @param  None
  * @retval None
  */
-static void APP_SystemClockConfig(void)
+static void sys_init_clock(void)
 {
     RCC_OscInitTypeDef OscInitstruct = {0};
     RCC_ClkInitTypeDef ClkInitstruct = {0};

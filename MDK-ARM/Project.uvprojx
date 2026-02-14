@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,PY32F403xD</Define>
               <Undefine></Undefine>
-              <IncludePath>..\Inc;..\Drivers\CMSIS\Include;..\Drivers\CMSIS\Device\PUYA\PY32F4xx\Include;..\Drivers\PY32F4xx_HAL_Driver\Inc;..\Middlewares\Third_Party\CherryUSB\port;..\Middlewares\Third_Party\CherryUSB\core;..\Middlewares\Third_Party\CherryUSB\common;..\Middlewares\Third_Party\CherryUSB\class\cdc;..\Middlewares\Third_Party\CherryUSB\class\hid</IncludePath>
+              <IncludePath>..\Inc;..\Drivers\CMSIS\Include;..\Drivers\CMSIS\Device\PUYA\PY32F4xx\Include;..\Drivers\PY32F4xx_HAL_Driver\Inc;..\Middlewares\Third_Party\CherryUSB\port;..\Middlewares\Third_Party\CherryUSB\core;..\Middlewares\Third_Party\CherryUSB\common;..\Middlewares\Third_Party\CherryUSB\class\cdc;..\Middlewares\Third_Party\CherryUSB\class\hid;..\ltx\inc;..\ltx\components\app;..\ltx\components\debug;..\ltx\components\event_group;..\ltx\components\lock;..\ltx\components\log;..\ltx\components\script</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -418,6 +418,16 @@
               <FileName>usbd_cdc_if.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Src\usbd_cdc_if.c</FilePath>
+            </File>
+            <File>
+              <FileName>myAPP_device_init.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Src\myAPP_device_init.c</FilePath>
+            </File>
+            <File>
+              <FileName>myAPP_system.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Src\myAPP_system.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -528,6 +538,61 @@
               <FileName>usbd_cdc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Middlewares\Third_Party\CherryUSB\class\cdc\usbd_cdc.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>ltx</GroupName>
+          <Files>
+            <File>
+              <FileName>ltx.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ltx\src\ltx.c</FilePath>
+            </File>
+            <File>
+              <FileName>ltx_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ltx\components\app\ltx_app.c</FilePath>
+            </File>
+            <File>
+              <FileName>ltx_cmd.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ltx\components\debug\ltx_cmd.c</FilePath>
+            </File>
+            <File>
+              <FileName>ltx_param.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ltx\components\debug\ltx_param.c</FilePath>
+            </File>
+            <File>
+              <FileName>ltx_event_group.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ltx\components\event_group\ltx_event_group.c</FilePath>
+            </File>
+            <File>
+              <FileName>ltx_lock.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ltx\components\lock\ltx_lock.c</FilePath>
+            </File>
+            <File>
+              <FileName>ltx_log.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ltx\components\log\ltx_log.c</FilePath>
+            </File>
+            <File>
+              <FileName>SEGGER_RTT.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ltx\components\log\SEGGER_RTT.c</FilePath>
+            </File>
+            <File>
+              <FileName>SEGGER_RTT_printf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ltx\components\log\SEGGER_RTT_printf.c</FilePath>
+            </File>
+            <File>
+              <FileName>ltx_script.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ltx\components\script\ltx_script.c</FilePath>
             </File>
           </Files>
         </Group>
