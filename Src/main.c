@@ -37,27 +37,61 @@
 #include "ltx_app.h"
 #include "myAPP_system.h"
 #include "myAPP_device_init.h"
+
 /* Private define ------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
+SPI_HandleTypeDef hspi2_handler;
+DMA_HandleTypeDef hdma1ch1_handler;
+
+ADC_HandleTypeDef hadc1_handler;
+DMA_HandleTypeDef hdma1ch2_handler;
+
+TIM_HandleTypeDef htim1_handler;
+
+I2C_HandleTypeDef hi2c1_handler;
+DMA_HandleTypeDef hdma1ch3;
+DMA_HandleTypeDef hdma1ch4;
+
 /* Private user code ---------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private function prototypes -----------------------------------------------*/
-static void sys_init_clock(void);
-static void sys_init_usb(void);
+static void mcu_init_clock(void);
+static void mcu_init_usb(void);
+static void mcu_init_spi2(void);
+static void mcu_init_i2c1(void);
+static void mcu_init_tim1(void);
+static void mcu_init_adc1(void);
+static void mcu_init_btn_pin(void);
+
 /**
  * @brief  Main program.
  * @retval int
  */
-int main(void)
-{
+int main(void){
+
     /* Reset of all peripherals, Initializes the Systick */
     HAL_Init();
 
     ltx_Log_init();
     LTX_LOG_STR("\n\nSYSTEM START\n\n");
 
-    /* System clock configuration */
-    sys_init_clock();
+    // 初始化外设
+    mcu_init_clock();
+    mcu_init_btn_pin();
+    mcu_init_tim1();
+    mcu_init_spi2();
+    mcu_init_i2c1();
+    mcu_init_adc1();
+    // adc 较准
+    if (HAL_ADCEx_Calibration_Start(&hadc1_handler) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC calibration Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+    // mcu_init_usb();
+
+    LTX_LOG_INFO("MCU init over at %dms\n", ltx_Sys_get_tick());
 
     #ifdef ltx_cfg_USE_IDLE_TASK
     // 如果需要空闲任务能力，那么需要将软中断设置为最低优先级，并且确保 systick 中断优先级比它更高
@@ -91,9 +125,6 @@ int main(void)
 
 
 
-    /* Initialize USB peripheral */
-    sys_init_usb();
-
     /* Infinite loop */
     while (1)
     {
@@ -105,12 +136,264 @@ int main(void)
     }
 }
 
+
+static void mcu_init_spi2(void){
+    hspi2_handler.Instance                  = SPI2;
+    hspi2_handler.Init.BaudRatePrescaler    = SPI_BAUDRATEPRESCALER_32; // 确保速度为 4Mbits/s
+    hspi2_handler.Init.Direction            = SPI_DIRECTION_1LINE;
+    hspi2_handler.Init.CLKPolarity          = SPI_POLARITY_LOW;
+    hspi2_handler.Init.CLKPhase             = SPI_PHASE_1EDGE ;
+    hspi2_handler.Init.DataSize             = SPI_DATASIZE_8BIT;
+    hspi2_handler.Init.FirstBit             = SPI_FIRSTBIT_MSB;
+    hspi2_handler.Init.NSS                  = SPI_NSS_HARD_OUTPUT;
+    hspi2_handler.Init.Mode                 = SPI_MODE_MASTER;
+    hspi2_handler.Init.CRCCalculation       = SPI_CRCCALCULATION_DISABLE;
+    /* hspi2_handler.Init.CRCPolynomial = 1; */
+    if (HAL_SPI_DeInit(&hspi2_handler) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("SPI2 Deinit Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+    
+    /* Initialize SPI peripheral */
+    if (HAL_SPI_Init(&hspi2_handler) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("SPI2 init Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+}
+
+static void mcu_init_i2c1(void){
+    hi2c1_handler.Instance             = I2C1;
+    hi2c1_handler.Init.ClockSpeed      = 400000;
+    hi2c1_handler.Init.DutyCycle       = I2C_DUTYCYCLE_16_9;
+    hi2c1_handler.Init.OwnAddress1     = 0x00;
+    hi2c1_handler.Init.AddressingMode  = I2C_ADDRESSINGMODE_7BIT;
+    hi2c1_handler.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;   /* Do not enable dual address */
+    /* hi2c1_handler.Init.OwnAddress2     = I2C_ADDRESS; */         /* Second address */
+    hi2c1_handler.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;  /* Disable general call */
+    hi2c1_handler.Init.NoStretchMode   = I2C_NOSTRETCH_DISABLE;    /* Enable clock stretching */
+    if (HAL_I2C_Init(&hi2c1_handler) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("I2C1 init Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+}
+
+static void mcu_init_tim1(void){
+    TIM_OC_InitTypeDef tim_channel_config;
+
+    htim1_handler.Instance = TIM1;                                                  /* Select TIM1 */
+    htim1_handler.Init.Period            = 100;                                      /* Auto reload value */
+    htim1_handler.Init.Prescaler         = 128 - 1;                                 /* Prescaler：800-1 */
+    htim1_handler.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;                  /* Clock division: tDTS=tCK_INT */
+    htim1_handler.Init.CounterMode       = TIM_COUNTERMODE_UP;                      /* CounterMode:Up */
+    htim1_handler.Init.RepetitionCounter = 1 - 1;                                   /* repetition counter value:1-1 */
+    htim1_handler.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;          /* TIM1_ARR register is not buffered */
+    /* Initializes the TIM PWM Time Base */
+    if (HAL_TIM_PWM_Init(&htim1_handler) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("Tim1 init Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+    
+    tim_channel_config.OCMode       = TIM_OCMODE_PWM1;                                     /* Set as PWM1 mode */
+    tim_channel_config.OCPolarity   = TIM_OCPOLARITY_HIGH;                                 /* OC channel active high */
+    tim_channel_config.OCFastMode   = TIM_OCFAST_DISABLE;                                  /* Output Compare fast disable */
+    tim_channel_config.OCNPolarity  = TIM_OCNPOLARITY_HIGH;                                /* OCN channel active high */
+    tim_channel_config.OCNIdleState = TIM_OCNIDLESTATE_RESET;                              /* OC1N channel idle state is low level */
+    tim_channel_config.OCIdleState  = TIM_OCIDLESTATE_RESET;                               /* OC1 channel idle state is low level */
+    tim_channel_config.Pulse        = 0;
+
+    if (HAL_TIM_PWM_ConfigChannel(&htim1_handler, &tim_channel_config, TIM_CHANNEL_1) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("Tim1 ch 1 init Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+    if (HAL_TIM_PWM_ConfigChannel(&htim1_handler, &tim_channel_config, TIM_CHANNEL_2) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("Tim1 ch 2 init Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+    if (HAL_TIM_PWM_ConfigChannel(&htim1_handler, &tim_channel_config, TIM_CHANNEL_3) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("Tim1 ch 3 init Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+}
+
+static void mcu_init_adc1(void){
+    ADC_ChannelConfTypeDef   adc_channel_config={0};
+    RCC_PeriphCLKInitTypeDef RCC_PeriphCLKInit={0};
+    
+    __HAL_RCC_ADC1_CLK_ENABLE();
+    
+    RCC_PeriphCLKInit.PeriphClockSelection= RCC_PERIPHCLK_ADC;
+    RCC_PeriphCLKInit.AdcClockSelection   = RCC_ADCPCLK2_DIV8;
+    HAL_RCCEx_PeriphCLKConfig(&RCC_PeriphCLKInit);
+    
+    hadc1_handler.Instance = ADC1;
+    
+    hadc1_handler.Init.Resolution            = ADC_RESOLUTION_12B;             /* 12-bit resolution for converted data  */
+    hadc1_handler.Init.DataAlign             = ADC_DATAALIGN_RIGHT;            /* Right-alignment for converted data */
+    hadc1_handler.Init.ScanConvMode          = ADC_SCAN_ENABLE;                /* Scan Mode Enable */
+    hadc1_handler.Init.ContinuousConvMode    = DISABLE;                        /* Single Conversion */
+    hadc1_handler.Init.NbrOfConversion       = 10;                              /* Conversion Number */
+    hadc1_handler.Init.DiscontinuousConvMode = DISABLE;                        /* Discontinuous Mode Disable */
+    hadc1_handler.Init.NbrOfDiscConversion   = 1;                              /* Discontinuous Conversion Number 1 */
+    hadc1_handler.Init.ExternalTrigConv      = ADC_SOFTWARE_START;             /* Software Trigger */
+
+    if (HAL_ADC_Init(&hadc1_handler) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC init Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_0;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_1;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_1;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_2;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_2;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_3;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_3;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_4;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_4;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_5;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_5;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_6;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_6;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_7;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_7;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_8;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_8;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_9;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_9;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_10;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+}
+
+static void mcu_init_btn_pin(void){
+    GPIO_InitTypeDef GPIO_InitStruct;
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Pin = GPIO_PIN_15;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    // GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Pin = GPIO_PIN_13;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+}
+
 /**
  * @brief  USB peripheral initialization function
  * @param  None
  * @retval None
  */
-static void sys_init_usb(void)
+static void mcu_init_usb(void)
 {
     __HAL_RCC_SYSCFG_CLK_ENABLE();
 
@@ -128,7 +411,7 @@ static void sys_init_usb(void)
  * @param  None
  * @retval None
  */
-static void sys_init_clock(void)
+static void mcu_init_clock(void)
 {
     RCC_OscInitTypeDef OscInitstruct = {0};
     RCC_ClkInitTypeDef ClkInitstruct = {0};
@@ -144,11 +427,13 @@ static void sys_init_clock(void)
     OscInitstruct.LSIState = RCC_LSI_OFF;            /* Disable LSI */
     OscInitstruct.PLL.PLLState = RCC_PLL_ON;         /* Enable PLL */
     OscInitstruct.PLL.PLLSource = RCC_PLLSOURCE_HSE; /* PLL clock source: HSE */
-    OscInitstruct.PLL.PLLMUL = RCC_PLL_MUL5;         /* PLL multiplication factor is 5 */
+    OscInitstruct.PLL.PLLMUL = RCC_PLL_MUL8;         // 128Mhz
     /* Configure Oscillators */
-    if (HAL_RCC_OscConfig(&OscInitstruct) != HAL_OK)
-    {
-        APP_ErrorHandler();
+    if (HAL_RCC_OscConfig(&OscInitstruct) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("RCC init Failed!\n");
+            HAL_Delay(1000);
+        }
     }
 
     ClkInitstruct.ClockType = RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
@@ -157,24 +442,14 @@ static void sys_init_clock(void)
     ClkInitstruct.APB1CLKDivider = RCC_HCLK_DIV1;         /* APB1 clock not divided */
     ClkInitstruct.APB2CLKDivider = RCC_HCLK_DIV1;         /* APB2 clock not divided */
     /* Configure Clocks */
-    if (HAL_RCC_ClockConfig(&ClkInitstruct, FLASH_LATENCY_4) != HAL_OK)
-    {
-        APP_ErrorHandler();
+    if (HAL_RCC_ClockConfig(&ClkInitstruct, FLASH_LATENCY_5) != HAL_OK){ // 被坑了，芯片是便宜，但是 flash 要开到 5 等待，希望他的 art 最好能像手册里说的一样“相当于 0 等待”
+        while(1){
+            LTX_LOG_ERRO("CLK init Failed!\n");
+            HAL_Delay(1000);
+        }
     }
 }
 
-/**
- * @brief  This function is executed in case of error occurrence.
- * @param  None
- * @retval None
- */
-void APP_ErrorHandler(void)
-{
-    /* Infinite loop */
-    while (1)
-    {
-    }
-}
 
 #ifdef USE_FULL_ASSERT
 /**

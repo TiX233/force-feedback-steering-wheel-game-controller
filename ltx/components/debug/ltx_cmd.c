@@ -22,6 +22,8 @@ void cmd_cb_reboot(uint8_t argc, char *argv[]);
 void cmd_cb_param(uint8_t argc, char *argv[]);
 void cmd_cb_ltx_app(uint8_t argc, char *argv[]);
 
+void cmd_cb_adc_start_dma(uint8_t argc, char *argv[]);
+
 ltx_Cmd_item cmd_list[] = {
     {
         .cmd_name = "echo",
@@ -67,6 +69,12 @@ ltx_Cmd_item cmd_list[] = {
         .cmd_name = "ltx_app",
         .brief = "manage ltx apps",
         .cmd_cb = cmd_cb_ltx_app,
+    },
+
+    {
+        .cmd_name = "adc_start_dma",
+        .brief = "start once adc dma read",
+        .cmd_cb = cmd_cb_adc_start_dma,
     },
 
 
@@ -565,3 +573,24 @@ void ltx_Cmd_process(char *cmd){
     LTX_LOG_INFO("Type /help to list all commands\n");
 }
 
+// 发起 adc dma 读取命令，测试期用
+uint32_t adc_get_buffer[12];
+void cmd_cb_adc_start_dma(uint8_t argc, char *argv[]){
+    if(argv[0][0] != '#'){
+        LTX_LOG_WARN("PERMISSION DENIED!\n");
+        return ;
+    }
+
+    LTX_LOG_INFO("ADC dma read start...\n");
+    if(HAL_ADC_Start_DMA(&hadc1_handler, adc_get_buffer, 10) != HAL_OK){
+        LTX_LOG_ERRO("ADC dma read ERROR!\n");
+    }
+}
+
+// 测试期用 adc 接收完成回调
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
+    LTX_LOG_DEBG("ADC dma read over:\n");
+    for(uint8_t i = 0; i < 10; i ++){
+        LTX_LOG_DEBG("\t[%d]=%d\n", i, adc_get_buffer[i]);
+    }
+}

@@ -43,8 +43,19 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* Private defines -----------------------------------------------------------*/
 /* Exported variables prototypes ---------------------------------------------*/
+extern SPI_HandleTypeDef hspi2_handler;
+extern DMA_HandleTypeDef hdma1ch1_handler;
+
+extern ADC_HandleTypeDef hadc1_handler;
+extern DMA_HandleTypeDef hdma1ch2_handler;
+
+extern TIM_HandleTypeDef htim1_handler;
+
+extern I2C_HandleTypeDef hi2c1_handler;
+extern DMA_HandleTypeDef hdma1ch3;
+extern DMA_HandleTypeDef hdma1ch4;
+
 /* Exported functions prototypes ---------------------------------------------*/
-void APP_ErrorHandler(void);
 
 #ifdef __cplusplus
 }

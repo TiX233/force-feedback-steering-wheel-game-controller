@@ -42,10 +42,228 @@
 /**
  * @brief Initialize global MSP
  */
-void HAL_MspInit(void)
-{
+void HAL_MspInit(void){
+
     __HAL_RCC_SYSCFG_CLK_ENABLE();
     __HAL_RCC_PWR_CLK_ENABLE();
+}
+
+/**
+  * @brief Initialize SPI related MSP
+  */
+void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
+
+    GPIO_InitTypeDef  GPIO_InitStruct;
+    /* Initialize SPI1 */
+    if (hspi->Instance == SPI2){
+
+        __HAL_RCC_GPIOB_CLK_ENABLE();                   /* Enable GPIOB clock */
+        __HAL_RCC_SYSCFG_CLK_ENABLE();                  /* Enable SYSCFG clock */
+        __HAL_RCC_SPI2_CLK_ENABLE();                    /* Enable SPI2 clock */
+        __HAL_RCC_DMA1_CLK_ENABLE();                    /* Enable DMA clock */
+
+        /* GPIO configured as SPI：MOSI*/
+        GPIO_InitStruct.Pin       = GPIO_PIN_15;
+        GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+        GPIO_InitStruct.Alternate = GPIO_AF3_SPI2;
+        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+        /* Interrupt configuration */
+        HAL_NVIC_SetPriority(SPI2_IRQn, 2, 0);
+        HAL_NVIC_EnableIRQ(SPI2_IRQn);
+
+        /* DMA_CH1 configuration */
+        hdma1ch1_handler.Instance                 = DMA1_Channel1;
+        hdma1ch1_handler.Init.Direction           = DMA_MEMORY_TO_PERIPH;
+        hdma1ch1_handler.Init.PeriphInc           = DMA_PINC_DISABLE;
+        hdma1ch1_handler.Init.MemInc              = DMA_MINC_ENABLE;
+        if (hspi->Init.DataSize <= SPI_DATASIZE_8BIT){
+            hdma1ch1_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+            hdma1ch1_handler.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
+        }else {
+            hdma1ch1_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
+            hdma1ch1_handler.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;
+        }
+
+        hdma1ch1_handler.Init.Mode                = DMA_NORMAL;
+        hdma1ch1_handler.Init.Priority            = DMA_PRIORITY_VERY_HIGH;
+        /* Initialize DMA */
+        HAL_DMA_Init(&hdma1ch1_handler);
+        /* DMA handle is associated with SPI handle */
+        __HAL_LINKDMA(hspi, hdmatx, hdma1ch1_handler);
+        
+        /* Set DMA channel map. */
+        HAL_DMA_ChannelMap(&hdma1ch1_handler, DMA_CHANNEL_MAP_SPI1_WR); /* SPI1_TX DMA1_CH1 */
+        
+        /* DMA interrupt configuration*/
+        HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 2, 0);
+        HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+    }
+}
+
+/**
+  * @brief Deinit SPI MSP
+  */
+void HAL_SPI_MspDeInit(SPI_HandleTypeDef *hspi){
+
+    if (hspi->Instance == SPI2){
+
+        /* Reset SPI peripheral */
+        __HAL_RCC_SPI2_FORCE_RESET();
+        __HAL_RCC_SPI2_RELEASE_RESET();
+
+        /* Disable SPI and GPIO clock */
+        /* Deinit SPI SCK */
+        HAL_GPIO_DeInit(GPIOB, GPIO_PIN_15);
+
+        HAL_NVIC_DisableIRQ(SPI2_IRQn);
+
+        HAL_DMA_DeInit(&hdma1ch1_handler);
+        HAL_NVIC_DisableIRQ(DMA1_Channel1_IRQn);
+
+    }
+}
+
+
+/**
+  * @brief Initialize ADC MSP.
+  */
+void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
+{
+    GPIO_InitTypeDef GPIO_InitStruct={0};
+    __HAL_RCC_SYSCFG_CLK_ENABLE();                              /* Enable SYSCFG clock */
+    __HAL_RCC_DMA1_CLK_ENABLE();                                /* Enable DMA clock */
+    __HAL_RCC_GPIOA_CLK_ENABLE();                               /* Enable GPIOA clock */
+    __HAL_RCC_GPIOB_CLK_ENABLE();                               /* Enable GPIOB clock */
+    
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 |GPIO_PIN_7 ;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    
+    HAL_NVIC_SetPriority(ADC1_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(ADC1_IRQn);
+    
+    hdma1ch2_handler.Instance                 = DMA1_Channel2;
+    hdma1ch2_handler.Init.Direction           = DMA_PERIPH_TO_MEMORY;    /* Transfer mode Periph to Memory */
+    hdma1ch2_handler.Init.PeriphInc           = DMA_PINC_DISABLE;        /* Peripheral increment mode Disable */
+    hdma1ch2_handler.Init.MemInc              = DMA_MINC_ENABLE;         /* Memory increment mode Enable */
+    hdma1ch2_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;     /* Peripheral data alignment : Word  */
+    hdma1ch2_handler.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;     /* Memory data alignment : Word  */
+    hdma1ch2_handler.Init.Mode                = DMA_CIRCULAR;            /* Circular DMA mode */
+    hdma1ch2_handler.Init.Priority            = DMA_PRIORITY_VERY_HIGH;  /* Priority level : high  */
+
+    HAL_DMA_DeInit(&hdma1ch2_handler);
+    HAL_DMA_Init(&hdma1ch2_handler);
+    
+    HAL_DMA_ChannelMap(&hdma1ch2_handler, DMA_CHANNEL_MAP_ADC1);          /* DMA Channel Remap */
+    __HAL_LINKDMA(hadc, DMA_Handle, hdma1ch2_handler);
+    
+    HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+}
+
+/**
+  * @brief Initialize TIM1 related MSP
+  */
+void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef *htim)
+{
+    GPIO_InitTypeDef   GPIO_InitStruct;
+    /* Enable TIM1 clock */
+    __HAL_RCC_TIM1_CLK_ENABLE();
+    /* Enable GPIOA clock */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;        /* Alternate Function Push Pull Mode */
+    // GPIO_InitStruct.Pull = GPIO_PULLUP;            /* Pull up */
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    
+    /* Initialize GPIOA8 */
+    GPIO_InitStruct.Pin = GPIO_PIN_8;
+    GPIO_InitStruct.Alternate = GPIO_AF4_TIM1;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    /* Initialize GPIOA9 */
+    GPIO_InitStruct.Pin = GPIO_PIN_9;
+    GPIO_InitStruct.Alternate = GPIO_AF4_TIM1;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    /* Initialize GPIOA10 */
+    GPIO_InitStruct.Pin = GPIO_PIN_10;
+    GPIO_InitStruct.Alternate = GPIO_AF4_TIM1;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+}
+
+/**
+  * @brief Initialize I2C MSP
+  */
+void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    __HAL_RCC_SYSCFG_CLK_ENABLE();                              /* Enable SYSCFG clock */
+    __HAL_RCC_DMA1_CLK_ENABLE();                                 /* Enable DMA clock */
+    __HAL_RCC_I2C1_CLK_ENABLE();                                /* Enable I2C clock */
+    __HAL_RCC_GPIOB_CLK_ENABLE();                               /* Enable GPIOB clock */
+
+    GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;                     /* Open-drain mode */
+    // GPIO_InitStruct.Pull = GPIO_PULLUP;                         /* Pull-up */
+    GPIO_InitStruct.Pull = GPIO_NOPULL; // 使用外部电阻上拉
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF1_I2C1;                  /* Alternate as I2C */
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);                     /* Initialize GPIO */
+    /* Reset I2C */
+    __HAL_RCC_I2C1_FORCE_RESET();
+    __HAL_RCC_I2C1_RELEASE_RESET();
+
+    /* I2C1 interrupt initialization */
+    HAL_NVIC_SetPriority(I2C1_EV_IRQn, 0, 0);                     /* Set interrupt priority */
+    HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);                             /* Enable I2C interrupt */
+    
+    HAL_NVIC_SetPriority(I2C1_ER_IRQn, 0, 0);                     /* Set interrupt priority */
+    HAL_NVIC_EnableIRQ(I2C1_ER_IRQn);                             /* Enable I2C interrupt */
+
+    /* Configure DMA */
+    /* Configure DMA handle for transmission */
+    hdma1ch3.Instance                 = DMA1_Channel3;           /* Select DMA channel 1 */
+    hdma1ch3.Init.Direction           = DMA_MEMORY_TO_PERIPH;    /* Memory to peripheral direction */
+    hdma1ch3.Init.PeriphInc           = DMA_PINC_DISABLE;        /* Disable peripheral address increment */
+    hdma1ch3.Init.MemInc              = DMA_MINC_ENABLE;         /* Enable memory address increment */
+    hdma1ch3.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;     /* Peripheral data width is 8 bits */
+    hdma1ch3.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;     /* Memory data width is 8 bits */
+    hdma1ch3.Init.Mode                = DMA_NORMAL;              /* Disable circular mode */
+    hdma1ch3.Init.Priority            = DMA_PRIORITY_VERY_HIGH;  /* Channel priority is very high */
+
+    HAL_DMA_Init(&hdma1ch3);                                     /* Initialize DMA channel 1 */
+    __HAL_LINKDMA(hi2c, hdmatx, hdma1ch3);                        /* Link DMA1 with IIC_TX */
+
+    /* Configure DMA handle for reception */
+    hdma1ch4.Instance                 = DMA1_Channel4;           /* Select DMA channel 2 */
+    hdma1ch4.Init.Direction           = DMA_PERIPH_TO_MEMORY;    /* Direction : peripheral to memory */
+    hdma1ch4.Init.PeriphInc           = DMA_PINC_DISABLE;        /* Disable peripheral address increment */
+    hdma1ch4.Init.MemInc              = DMA_MINC_ENABLE;         /* Enable memory address increment */
+    hdma1ch4.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;     /* Peripheral data width is 8 bits */
+    hdma1ch4.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;     /* Memory data width is 8 bits */
+    hdma1ch4.Init.Mode                = DMA_NORMAL;              /* Disable circular mode */
+    hdma1ch4.Init.Priority            = DMA_PRIORITY_HIGH;       /* Channel priority is high */
+
+    HAL_DMA_Init(&hdma1ch4);                                     /* Initialize DMA channel 1 */
+    __HAL_LINKDMA(hi2c, hdmarx, hdma1ch4);                        /* Link DMA1 with IIC_RX */
+    
+    /* DMA configuration request image */
+    HAL_DMA_ChannelMap(&hdma1ch3, DMA_CHANNEL_MAP_I2C1_WR); /* DMA3_MAP选择为IIC_TX */
+    HAL_DMA_ChannelMap(&hdma1ch4, DMA_CHANNEL_MAP_I2C1_RD); /* DMA4_MAP选择为IIC_RX */
+    
+    /* NVIC interrupt enabling DMA */ 
+    HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 1, 1);             /* Set interrupt priority */
+    HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);                     /* Enable DMA channel 1 interrupt */
+
+    HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 1);           /* Set interrupt priority */
+    HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);                   /* Enable DMA channel 2 interrupt */
 }
 
 /************************ (C) COPYRIGHT Puya *****END OF FILE******************/

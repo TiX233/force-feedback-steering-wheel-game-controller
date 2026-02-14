@@ -159,4 +159,35 @@ void USB_IRQHandler(void)
 {
     USBD_IRQHandler();
 }
+
+
+void SPI1_IRQHandler(void){
+    HAL_SPI_IRQHandler(&hspi2_handler);
+}
+void DMA1_Channel1_IRQHandler(void){
+    HAL_DMA_IRQHandler(hspi2_handler.hdmatx);
+}
+
+
+void ADC1_2_IRQHandler(void){
+    HAL_ADC_IRQHandler(&hadc1_handler);
+}
+void DMA1_Channel2_IRQHandler(void){
+    HAL_DMA_IRQHandler(hadc1_handler.DMA_Handle);
+}
+
+
+void I2C1_EV_IRQHandler(void){
+    HAL_I2C_EV_IRQHandler(&hi2c1_handler);
+}
+void I2C1_ER_IRQHandler(void){
+    HAL_I2C_ER_IRQHandler(&hi2c1_handler);
+}
+void DMA1_Channel3_IRQHandler(void){
+    HAL_DMA_IRQHandler(hi2c1_handler.hdmatx);
+}
+void DMA1_Channel4_IRQHandler(void){
+    HAL_DMA_IRQHandler(hi2c1_handler.hdmarx);
+}
+
 /************************ (C) COPYRIGHT Puya *****END OF FILE******************/
