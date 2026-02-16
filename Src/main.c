@@ -46,6 +46,11 @@ DMA_HandleTypeDef hdma1ch1_handler;
 ADC_HandleTypeDef hadc1_handler;
 DMA_HandleTypeDef hdma1ch2_handler;
 
+uint32_t adc1_buffer[5];
+
+ADC_HandleTypeDef hadc2_handler;
+// DMA_HandleTypeDef hdma1ch2_handler;
+
 TIM_HandleTypeDef htim1_handler;
 
 I2C_HandleTypeDef hi2c1_handler;
@@ -61,6 +66,7 @@ static void mcu_init_spi2(void);
 static void mcu_init_i2c1(void);
 static void mcu_init_tim1(void);
 static void mcu_init_adc1(void);
+static void mcu_init_adc2(void);
 static void mcu_init_btn_pin(void);
 
 /**
@@ -78,17 +84,27 @@ int main(void){
     // 初始化外设
     mcu_init_clock();
     mcu_init_btn_pin();
-    mcu_init_tim1();
-    mcu_init_spi2();
-    mcu_init_i2c1();
     mcu_init_adc1();
-    // adc 较准
+    // adc1 较准
     if (HAL_ADCEx_Calibration_Start(&hadc1_handler) != HAL_OK){
         while(1){
             LTX_LOG_ERRO("ADC calibration Failed!\n");
             HAL_Delay(1000);
         }
     }
+    // 在 tim1 启动前开启 adc1
+    HAL_ADC_Start_DMA(&hadc1_handler, (uint32_t*)adc1_buffer, 3);
+    mcu_init_adc2();
+    // adc 较准
+    if (HAL_ADCEx_Calibration_Start(&hadc2_handler) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC calibration Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+    mcu_init_tim1();
+    mcu_init_spi2();
+    mcu_init_i2c1();
     // mcu_init_usb();
 
     LTX_LOG_INFO("MCU init over at %dms\n", ltx_Sys_get_tick());
@@ -186,11 +202,11 @@ static void mcu_init_i2c1(void){
 static void mcu_init_tim1(void){
     TIM_OC_InitTypeDef tim_channel_config;
 
-    htim1_handler.Instance = TIM1;                                                  /* Select TIM1 */
-    htim1_handler.Init.Period            = 100;                                      /* Auto reload value */
-    htim1_handler.Init.Prescaler         = 128 - 1;                                 /* Prescaler：800-1 */
-    htim1_handler.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;                  /* Clock division: tDTS=tCK_INT */
-    htim1_handler.Init.CounterMode       = TIM_COUNTERMODE_UP;                      /* CounterMode:Up */
+    htim1_handler.Instance = TIM1;
+    htim1_handler.Init.Period            = 3199;                            // 20kHz，中心对齐模式下先递增再递减，所以频率要除以 2
+    htim1_handler.Init.Prescaler         = 0;                               // 不分频
+    htim1_handler.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;          // 不分频
+    htim1_handler.Init.CounterMode       = TIM_COUNTERMODE_CENTERALIGNED1;  // 中心对齐
     htim1_handler.Init.RepetitionCounter = 1 - 1;                                   /* repetition counter value:1-1 */
     htim1_handler.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;          /* TIM1_ARR register is not buffered */
     /* Initializes the TIM PWM Time Base */
@@ -227,6 +243,22 @@ static void mcu_init_tim1(void){
             HAL_Delay(1000);
         }
     }
+
+    HAL_TIM_PWM_Start(&htim1_handler, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&htim1_handler, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Start(&htim1_handler, TIM_CHANNEL_3);
+
+    TIM_MasterConfigTypeDef  sMasterConfig;
+
+    sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+    sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+    HAL_TIMEx_MasterConfigSynchronization(&htim1_handler, &sMasterConfig);
+    if (HAL_TIM_Base_Start(&htim1_handler) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("Tim1 trgo cfg Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
 }
 
 static void mcu_init_adc1(void){
@@ -236,7 +268,7 @@ static void mcu_init_adc1(void){
     __HAL_RCC_ADC1_CLK_ENABLE();
     
     RCC_PeriphCLKInit.PeriphClockSelection= RCC_PERIPHCLK_ADC;
-    RCC_PeriphCLKInit.AdcClockSelection   = RCC_ADCPCLK2_DIV8;
+    RCC_PeriphCLKInit.AdcClockSelection   = RCC_ADCPCLK2_DIV8; // 16Mhz
     HAL_RCCEx_PeriphCLKConfig(&RCC_PeriphCLKInit);
     
     hadc1_handler.Instance = ADC1;
@@ -245,25 +277,87 @@ static void mcu_init_adc1(void){
     hadc1_handler.Init.DataAlign             = ADC_DATAALIGN_RIGHT;            /* Right-alignment for converted data */
     hadc1_handler.Init.ScanConvMode          = ADC_SCAN_ENABLE;                /* Scan Mode Enable */
     hadc1_handler.Init.ContinuousConvMode    = DISABLE;                        /* Single Conversion */
-    hadc1_handler.Init.NbrOfConversion       = 10;                              /* Conversion Number */
+    hadc1_handler.Init.NbrOfConversion       = 3;                              /* Conversion Number */
     hadc1_handler.Init.DiscontinuousConvMode = DISABLE;                        /* Discontinuous Mode Disable */
     hadc1_handler.Init.NbrOfDiscConversion   = 1;                              /* Discontinuous Conversion Number 1 */
-    hadc1_handler.Init.ExternalTrigConv      = ADC_SOFTWARE_START;             /* Software Trigger */
+    hadc1_handler.Init.ExternalTrigConv      = ADC_EXTERNALTRIGINJECCONV_T1_TRGO; // Tim1 TRGO 注入触发
 
     if (HAL_ADC_Init(&hadc1_handler) != HAL_OK){
         while(1){
-            LTX_LOG_ERRO("ADC init Failed!\n");
+            LTX_LOG_ERRO("ADC1 init Failed!\n");
             HAL_Delay(1000);
         }
     }
     
+    adc_channel_config.Channel      = ADC_CHANNEL_5;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_1;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_3CYCLES_5; // 16Mhz，采样时间为 3.5+12.5=16周期，1us
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC1 ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_6;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_2;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_3CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC1 ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+    
+    adc_channel_config.Channel      = ADC_CHANNEL_7;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_3;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_3CYCLES_5;
+    
+    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC1 ch %d init Failed!\n", adc_channel_config.Channel);
+            HAL_Delay(1000);
+        }
+    }
+}
+
+static void mcu_init_adc2(void){
+    ADC_ChannelConfTypeDef   adc_channel_config={0};
+    // RCC_PeriphCLKInitTypeDef RCC_PeriphCLKInit={0};
+    
+    __HAL_RCC_ADC2_CLK_ENABLE();
+    
+    // RCC_PeriphCLKInit.PeriphClockSelection= RCC_PERIPHCLK_ADC;
+    // RCC_PeriphCLKInit.AdcClockSelection   = RCC_ADCPCLK2_DIV8;
+    // HAL_RCCEx_PeriphCLKConfig(&RCC_PeriphCLKInit);
+    
+    hadc2_handler.Instance = ADC2;
+    
+    hadc2_handler.Init.Resolution            = ADC_RESOLUTION_12B;             /* 12-bit resolution for converted data  */
+    hadc2_handler.Init.DataAlign             = ADC_DATAALIGN_RIGHT;            /* Right-alignment for converted data */
+    hadc2_handler.Init.ScanConvMode          = ADC_SCAN_ENABLE;                /* Scan Mode Enable */
+    hadc2_handler.Init.ContinuousConvMode    = DISABLE;                        /* Single Conversion */
+    hadc2_handler.Init.NbrOfConversion       = 7;                              /* Conversion Number */
+    hadc2_handler.Init.DiscontinuousConvMode = DISABLE;                        /* Discontinuous Mode Disable */
+    hadc2_handler.Init.NbrOfDiscConversion   = 1;                              /* Discontinuous Conversion Number 1 */
+    hadc2_handler.Init.ExternalTrigConv      = ADC_SOFTWARE_START;             /* Software Trigger */
+
+    if (HAL_ADC_Init(&hadc2_handler) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("ADC2 init Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+
     adc_channel_config.Channel      = ADC_CHANNEL_0;
     adc_channel_config.Rank         = ADC_REGULAR_RANK_1;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
-    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+    if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){
-            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            LTX_LOG_ERRO("ADC2 ch %d init Failed!\n", adc_channel_config.Channel);
             HAL_Delay(1000);
         }
     }
@@ -272,9 +366,9 @@ static void mcu_init_adc1(void){
     adc_channel_config.Rank         = ADC_REGULAR_RANK_2;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
-    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+    if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){
-            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            LTX_LOG_ERRO("ADC2 ch %d init Failed!\n", adc_channel_config.Channel);
             HAL_Delay(1000);
         }
     }
@@ -283,9 +377,9 @@ static void mcu_init_adc1(void){
     adc_channel_config.Rank         = ADC_REGULAR_RANK_3;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
-    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+    if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){
-            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            LTX_LOG_ERRO("ADC2 ch %d init Failed!\n", adc_channel_config.Channel);
             HAL_Delay(1000);
         }
     }
@@ -294,9 +388,9 @@ static void mcu_init_adc1(void){
     adc_channel_config.Rank         = ADC_REGULAR_RANK_4;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
-    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+    if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){
-            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            LTX_LOG_ERRO("ADC2 ch %d init Failed!\n", adc_channel_config.Channel);
             HAL_Delay(1000);
         }
     }
@@ -305,64 +399,31 @@ static void mcu_init_adc1(void){
     adc_channel_config.Rank         = ADC_REGULAR_RANK_5;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
-    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+    if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){
-            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
-            HAL_Delay(1000);
-        }
-    }
-    
-    adc_channel_config.Channel      = ADC_CHANNEL_5;
-    adc_channel_config.Rank         = ADC_REGULAR_RANK_6;
-    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
-    
-    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
-        while(1){
-            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
-            HAL_Delay(1000);
-        }
-    }
-    
-    adc_channel_config.Channel      = ADC_CHANNEL_6;
-    adc_channel_config.Rank         = ADC_REGULAR_RANK_7;
-    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
-    
-    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
-        while(1){
-            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
-            HAL_Delay(1000);
-        }
-    }
-    
-    adc_channel_config.Channel      = ADC_CHANNEL_7;
-    adc_channel_config.Rank         = ADC_REGULAR_RANK_8;
-    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
-    
-    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
-        while(1){
-            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            LTX_LOG_ERRO("ADC2 ch %d init Failed!\n", adc_channel_config.Channel);
             HAL_Delay(1000);
         }
     }
     
     adc_channel_config.Channel      = ADC_CHANNEL_8;
-    adc_channel_config.Rank         = ADC_REGULAR_RANK_9;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_6;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
-    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+    if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){
-            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            LTX_LOG_ERRO("ADC2 ch %d init Failed!\n", adc_channel_config.Channel);
             HAL_Delay(1000);
         }
     }
     
     adc_channel_config.Channel      = ADC_CHANNEL_9;
-    adc_channel_config.Rank         = ADC_REGULAR_RANK_10;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_7;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
-    if (HAL_ADC_ConfigChannel(&hadc1_handler, &adc_channel_config) != HAL_OK){
+    if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){
-            LTX_LOG_ERRO("ADC ch %d init Failed!\n", adc_channel_config.Channel);
+            LTX_LOG_ERRO("ADC2 ch %d init Failed!\n", adc_channel_config.Channel);
             HAL_Delay(1000);
         }
     }

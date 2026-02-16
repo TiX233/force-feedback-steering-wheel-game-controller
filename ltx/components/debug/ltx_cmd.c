@@ -4,7 +4,9 @@
 #include "ltx.h"
 #include "ltx_app.h"
 #include "ltx_log.h"
+#include "ltx_bldc.h"
 #include "myAPP_system.h"
+#include "myAPP_motor.h"
 // #include "myAPP_device_init.h"
 
 typedef struct {
@@ -22,7 +24,8 @@ void cmd_cb_reboot(uint8_t argc, char *argv[]);
 void cmd_cb_param(uint8_t argc, char *argv[]);
 void cmd_cb_ltx_app(uint8_t argc, char *argv[]);
 
-void cmd_cb_adc_start_dma(uint8_t argc, char *argv[]);
+void cmd_cb_adc1(uint8_t argc, char *argv[]);
+void cmd_cb_pwm(uint8_t argc, char *argv[]);
 
 ltx_Cmd_item cmd_list[] = {
     {
@@ -72,9 +75,15 @@ ltx_Cmd_item cmd_list[] = {
     },
 
     {
-        .cmd_name = "adc_start_dma",
-        .brief = "start once adc dma read",
-        .cmd_cb = cmd_cb_adc_start_dma,
+        .cmd_name = "adc1",
+        .brief = "for adc1 test",
+        .cmd_cb = cmd_cb_adc1,
+    },
+
+    {
+        .cmd_name = "pwm",
+        .brief = "set motor pwm duty",
+        .cmd_cb = cmd_cb_pwm,
     },
 
 
@@ -573,24 +582,55 @@ void ltx_Cmd_process(char *cmd){
     LTX_LOG_INFO("Type /help to list all commands\n");
 }
 
-// 发起 adc dma 读取命令，测试期用
-uint32_t adc_get_buffer[12];
-void cmd_cb_adc_start_dma(uint8_t argc, char *argv[]){
-    if(argv[0][0] != '#'){
-        LTX_LOG_WARN("PERMISSION DENIED!\n");
-        return ;
-    }
+// adc1 测试命令
+uint32_t adc_get_counter = 0;
+extern uint32_t adc1_buffer[5];
+void cmd_cb_adc1(uint8_t argc, char *argv[]){
+    // if(argv[0][0] != '#'){
+    //     LTX_LOG_WARN("PERMISSION DENIED!\n");
+    //     return ;
+    // }
 
-    LTX_LOG_INFO("ADC dma read start...\n");
-    if(HAL_ADC_Start_DMA(&hadc1_handler, adc_get_buffer, 10) != HAL_OK){
-        LTX_LOG_ERRO("ADC dma read ERROR!\n");
+    LTX_LOG_DEBG("adc1 cnt: %d\n", adc_get_counter);
+    for(uint8_t i = 0; i < 3; i ++){
+        LTX_LOG_DEBG("\t[%d] = %d\n", adc1_buffer[i]);
     }
 }
 
 // 测试期用 adc 接收完成回调
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
-    LTX_LOG_DEBG("ADC dma read over:\n");
-    for(uint8_t i = 0; i < 10; i ++){
-        LTX_LOG_DEBG("\t[%d]=%d\n", i, adc_get_buffer[i]);
+    adc_get_counter ++;
+}
+
+// 直接设置 pwm 占空比命令，调试用
+void cmd_cb_pwm(uint8_t argc, char *argv[]){
+    if(argv[0][0] != '#'){
+        LTX_LOG_WARN("PERMISSION DENIED!\n");
+        return ;
     }
+
+    if(argc < 4){
+        goto Useage_pwm;
+    }
+
+    float duty_u, duty_v, duty_w;
+
+    sscanf(argv[1], "%f", &duty_u);
+    sscanf(argv[2], "%f", &duty_v);
+    sscanf(argv[3], "%f", &duty_w);
+
+    if(duty_u > 100.0f || duty_v > 100.0f || duty_w > 100.0f){
+        LTX_LOG_WARN("duty not in range(0~100)!");
+        return ;
+    }
+
+    LTX_LOG_INFO("Set pwm to %f%% %f%% %f%%\n", duty_u, duty_v, duty_w);
+
+    ltx_bldc_set_duty_u(motor_wheel, duty_u);
+    ltx_bldc_set_duty_v(motor_wheel, duty_v);
+    ltx_bldc_set_duty_w(motor_wheel, duty_w);
+
+    return ;
+Useage_pwm:
+    LTX_LOG_INFO("Useage: %s <u(0~100)> <v> <w>\n", argv[0]);
 }

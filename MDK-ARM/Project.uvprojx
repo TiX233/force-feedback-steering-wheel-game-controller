@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,PY32F403xD</Define>
               <Undefine></Undefine>
-              <IncludePath>..\Inc;..\Drivers\CMSIS\Include;..\Drivers\CMSIS\Device\PUYA\PY32F4xx\Include;..\Drivers\PY32F4xx_HAL_Driver\Inc;..\Middlewares\Third_Party\CherryUSB\port;..\Middlewares\Third_Party\CherryUSB\core;..\Middlewares\Third_Party\CherryUSB\common;..\Middlewares\Third_Party\CherryUSB\class\cdc;..\Middlewares\Third_Party\CherryUSB\class\hid;..\ltx\inc;..\ltx\components\app;..\ltx\components\debug;..\ltx\components\event_group;..\ltx\components\lock;..\ltx\components\log;..\ltx\components\script</IncludePath>
+              <IncludePath>..\Inc;..\Drivers\CMSIS\Include;..\Drivers\CMSIS\Device\PUYA\PY32F4xx\Include;..\Drivers\PY32F4xx_HAL_Driver\Inc;..\Middlewares\Third_Party\CherryUSB\port;..\Middlewares\Third_Party\CherryUSB\core;..\Middlewares\Third_Party\CherryUSB\common;..\Middlewares\Third_Party\CherryUSB\class\cdc;..\Middlewares\Third_Party\CherryUSB\class\hid;..\ltx\inc;..\ltx\components\app;..\ltx\components\debug;..\ltx\components\event_group;..\ltx\components\lock;..\ltx\components\log;..\ltx\components\script;..\ltx\drivers\bldc</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -428,6 +428,11 @@
               <FileName>myAPP_system.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Src\myAPP_system.c</FilePath>
+            </File>
+            <File>
+              <FileName>myAPP_motor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Src\myAPP_motor.c</FilePath>
             </File>
           </Files>
         </Group>

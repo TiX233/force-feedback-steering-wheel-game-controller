@@ -131,40 +131,76 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef *hspi){
 void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
 {
     GPIO_InitTypeDef GPIO_InitStruct={0};
+
     __HAL_RCC_SYSCFG_CLK_ENABLE();                              /* Enable SYSCFG clock */
     __HAL_RCC_DMA1_CLK_ENABLE();                                /* Enable DMA clock */
     __HAL_RCC_GPIOA_CLK_ENABLE();                               /* Enable GPIOA clock */
     __HAL_RCC_GPIOB_CLK_ENABLE();                               /* Enable GPIOB clock */
-    
-    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 |GPIO_PIN_7 ;
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    
-    HAL_NVIC_SetPriority(ADC1_IRQn, 1, 0);
-    HAL_NVIC_EnableIRQ(ADC1_IRQn);
-    
-    hdma1ch2_handler.Instance                 = DMA1_Channel2;
-    hdma1ch2_handler.Init.Direction           = DMA_PERIPH_TO_MEMORY;    /* Transfer mode Periph to Memory */
-    hdma1ch2_handler.Init.PeriphInc           = DMA_PINC_DISABLE;        /* Peripheral increment mode Disable */
-    hdma1ch2_handler.Init.MemInc              = DMA_MINC_ENABLE;         /* Memory increment mode Enable */
-    hdma1ch2_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;     /* Peripheral data alignment : Word  */
-    hdma1ch2_handler.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;     /* Memory data alignment : Word  */
-    hdma1ch2_handler.Init.Mode                = DMA_CIRCULAR;            /* Circular DMA mode */
-    hdma1ch2_handler.Init.Priority            = DMA_PRIORITY_VERY_HIGH;  /* Priority level : high  */
 
-    HAL_DMA_DeInit(&hdma1ch2_handler);
-    HAL_DMA_Init(&hdma1ch2_handler);
+    // 电流采样
+    if (hadc->Instance == ADC1){
     
-    HAL_DMA_ChannelMap(&hdma1ch2_handler, DMA_CHANNEL_MAP_ADC1);          /* DMA Channel Remap */
-    __HAL_LINKDMA(hadc, DMA_Handle, hdma1ch2_handler);
+        GPIO_InitStruct.Pin = GPIO_PIN_5 | GPIO_PIN_6 |GPIO_PIN_7 ;
+        GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+        
+        HAL_NVIC_SetPriority(ADC1_IRQn, 1, 0);
+        HAL_NVIC_EnableIRQ(ADC1_IRQn);
+        
+        hdma1ch2_handler.Instance                 = DMA1_Channel2;
+        hdma1ch2_handler.Init.Direction           = DMA_PERIPH_TO_MEMORY;    /* Transfer mode Periph to Memory */
+        hdma1ch2_handler.Init.PeriphInc           = DMA_PINC_DISABLE;        /* Peripheral increment mode Disable */
+        hdma1ch2_handler.Init.MemInc              = DMA_MINC_ENABLE;         /* Memory increment mode Enable */
+        hdma1ch2_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;     /* Peripheral data alignment : Word  */
+        hdma1ch2_handler.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;     /* Memory data alignment : Word  */
+        hdma1ch2_handler.Init.Mode                = DMA_CIRCULAR;            /* Circular DMA mode */
+        hdma1ch2_handler.Init.Priority            = DMA_PRIORITY_VERY_HIGH;  /* Priority level : high  */
+
+        HAL_DMA_DeInit(&hdma1ch2_handler);
+        HAL_DMA_Init(&hdma1ch2_handler);
+        
+        HAL_DMA_ChannelMap(&hdma1ch2_handler, DMA_CHANNEL_MAP_ADC1);          /* DMA Channel Remap */
+        __HAL_LINKDMA(hadc, DMA_Handle, hdma1ch2_handler);
+        
+        HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 1, 0);
+        HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+    }
+
+    // 摇杆等
+    if (hadc->Instance == ADC2){
     
-    HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 1, 0);
-    HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+        GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4;
+        GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+        GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
+        GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+        
+        // HAL_NVIC_SetPriority(ADC1_IRQn, 1, 0);
+        // HAL_NVIC_EnableIRQ(ADC1_IRQn);
+        
+        // hdma1ch2_handler.Instance                 = DMA1_Channel2;
+        // hdma1ch2_handler.Init.Direction           = DMA_PERIPH_TO_MEMORY;    /* Transfer mode Periph to Memory */
+        // hdma1ch2_handler.Init.PeriphInc           = DMA_PINC_DISABLE;        /* Peripheral increment mode Disable */
+        // hdma1ch2_handler.Init.MemInc              = DMA_MINC_ENABLE;         /* Memory increment mode Enable */
+        // hdma1ch2_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;     /* Peripheral data alignment : Word  */
+        // hdma1ch2_handler.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;     /* Memory data alignment : Word  */
+        // hdma1ch2_handler.Init.Mode                = DMA_CIRCULAR;            /* Circular DMA mode */
+        // hdma1ch2_handler.Init.Priority            = DMA_PRIORITY_VERY_HIGH;  /* Priority level : high  */
+
+        // HAL_DMA_DeInit(&hdma1ch2_handler);
+        // HAL_DMA_Init(&hdma1ch2_handler);
+        
+        // HAL_DMA_ChannelMap(&hdma1ch2_handler, DMA_CHANNEL_MAP_ADC1);          /* DMA Channel Remap */
+        // __HAL_LINKDMA(hadc, DMA_Handle, hdma1ch2_handler);
+        
+        // HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 1, 0);
+        // HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+    }
+
 }
 
 /**
