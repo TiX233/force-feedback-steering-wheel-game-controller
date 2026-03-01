@@ -54,7 +54,7 @@ void HAL_MspInit(void){
 void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
 
     GPIO_InitTypeDef  GPIO_InitStruct;
-    /* Initialize SPI1 */
+    /* Initialize SPI2 */
     if (hspi->Instance == SPI2){
 
         __HAL_RCC_GPIOB_CLK_ENABLE();                   /* Enable GPIOB clock */
@@ -65,7 +65,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
         /* GPIO configured as SPI：MOSI*/
         GPIO_InitStruct.Pin       = GPIO_PIN_15;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
         GPIO_InitStruct.Alternate = GPIO_AF3_SPI2;
         HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
         /* Interrupt configuration */
@@ -93,7 +93,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
         __HAL_LINKDMA(hspi, hdmatx, hdma1ch1_handler);
         
         /* Set DMA channel map. */
-        HAL_DMA_ChannelMap(&hdma1ch1_handler, DMA_CHANNEL_MAP_SPI1_WR); /* SPI1_TX DMA1_CH1 */
+        HAL_DMA_ChannelMap(&hdma1ch1_handler, DMA_CHANNEL_MAP_SPI2_WR); /* SPI2_TX DMA1_CH1 */
         
         /* DMA interrupt configuration*/
         HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 2, 0);

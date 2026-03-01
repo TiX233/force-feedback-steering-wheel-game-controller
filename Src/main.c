@@ -120,8 +120,8 @@ int main(void){
     ltx_App_resume(&app_system);
     
     // 创建外部硬件初始化 app 并运行
-    // ltx_App_init(&app_device_init);
-    // ltx_App_resume(&app_device_init);
+    ltx_App_init(&app_device_init);
+    ltx_App_resume(&app_device_init);
     
     // 启动调度器
     #ifndef ltx_cfg_USE_IDLE_TASK
@@ -161,7 +161,7 @@ static void mcu_init_spi2(void){
     hspi2_handler.Init.CLKPhase             = SPI_PHASE_1EDGE ;
     hspi2_handler.Init.DataSize             = SPI_DATASIZE_8BIT;
     hspi2_handler.Init.FirstBit             = SPI_FIRSTBIT_MSB;
-    hspi2_handler.Init.NSS                  = SPI_NSS_HARD_OUTPUT;
+    hspi2_handler.Init.NSS                  = SPI_NSS_SOFT;
     hspi2_handler.Init.Mode                 = SPI_MODE_MASTER;
     hspi2_handler.Init.CRCCalculation       = SPI_CRCCALCULATION_DISABLE;
     /* hspi2_handler.Init.CRCPolynomial = 1; */

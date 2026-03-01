@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,PY32F403xD</Define>
               <Undefine></Undefine>
-              <IncludePath>..\Inc;..\Drivers\CMSIS\Include;..\Drivers\CMSIS\Device\PUYA\PY32F4xx\Include;..\Drivers\PY32F4xx_HAL_Driver\Inc;..\Middlewares\Third_Party\CherryUSB\port;..\Middlewares\Third_Party\CherryUSB\core;..\Middlewares\Third_Party\CherryUSB\common;..\Middlewares\Third_Party\CherryUSB\class\cdc;..\Middlewares\Third_Party\CherryUSB\class\hid;..\ltx\inc;..\ltx\components\app;..\ltx\components\debug;..\ltx\components\event_group;..\ltx\components\lock;..\ltx\components\log;..\ltx\components\script;..\ltx\drivers\bldc</IncludePath>
+              <IncludePath>..\Inc;..\Drivers\CMSIS\Include;..\Drivers\CMSIS\Device\PUYA\PY32F4xx\Include;..\Drivers\PY32F4xx_HAL_Driver\Inc;..\Middlewares\Third_Party\CherryUSB\port;..\Middlewares\Third_Party\CherryUSB\core;..\Middlewares\Third_Party\CherryUSB\common;..\Middlewares\Third_Party\CherryUSB\class\cdc;..\Middlewares\Third_Party\CherryUSB\class\hid;..\ltx\inc;..\ltx\components\app;..\ltx\components\debug;..\ltx\components\event_group;..\ltx\components\lock;..\ltx\components\log;..\ltx\components\script;..\ltx\drivers\bldc;..\ltx\drivers\foc1;..\Devices</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -433,6 +433,11 @@
               <FileName>myAPP_motor.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Src\myAPP_motor.c</FilePath>
+            </File>
+            <File>
+              <FileName>myAPP_led.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Src\myAPP_led.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -598,6 +603,21 @@
               <FileName>ltx_script.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\ltx\components\script\ltx_script.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Devices</GroupName>
+          <Files>
+            <File>
+              <FileName>mt6701.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Devices\mt6701.c</FilePath>
+            </File>
+            <File>
+              <FileName>ws2812.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Devices\ws2812.c</FilePath>
             </File>
           </Files>
         </Group>

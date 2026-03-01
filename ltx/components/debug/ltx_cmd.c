@@ -7,7 +7,9 @@
 #include "ltx_bldc.h"
 #include "myAPP_system.h"
 #include "myAPP_motor.h"
-// #include "myAPP_device_init.h"
+#include "myAPP_device_init.h"
+#include "mt6701.h"
+#include "ws2812.h"
 
 typedef struct {
     const char *cmd_name;
@@ -26,6 +28,8 @@ void cmd_cb_ltx_app(uint8_t argc, char *argv[]);
 
 void cmd_cb_adc1(uint8_t argc, char *argv[]);
 void cmd_cb_pwm(uint8_t argc, char *argv[]);
+void cmd_cb_mag(uint8_t argc, char *argv[]);
+void cmd_cb_led(uint8_t argc, char *argv[]);
 
 ltx_Cmd_item cmd_list[] = {
     {
@@ -84,6 +88,18 @@ ltx_Cmd_item cmd_list[] = {
         .cmd_name = "pwm",
         .brief = "set motor pwm duty",
         .cmd_cb = cmd_cb_pwm,
+    },
+
+    {
+        .cmd_name = "mag",
+        .brief = "read mag encoder",
+        .cmd_cb = cmd_cb_mag,
+    },
+
+    {
+        .cmd_name = "led",
+        .brief = "set led rgb",
+        .cmd_cb = cmd_cb_led,
     },
 
 
@@ -375,24 +391,30 @@ void print_cb_heart_beat(void *param){
     extern uint32_t heart_beat_count;
     LTX_LOG_FMT("Heartbeat: %d\n", heart_beat_count);
 }
+// 磁编码角度更新打印回调
+void print_cb_mag_angle(void *param){
+    LTX_LOG_FMT("ma:%f\n", mag_angle);
+}
+// 磁编码弧度更新打印回调
+void print_cb_mag_rad(void *param){
+    LTX_LOG_FMT("mr:%f\n", mag_rad);
+}
 
-// 可供打印的数据对象
+// 可追踪打印数据的参数信息，需要提供名字、话题指针以及打印回调
+#define _P_DATA_INFO(name_str, topic_ptr, callback)     {.item_name = name_str,.topic = topic_ptr,\
+                                                        .subscriber = {.callback_func = callback,.prev = NULL,.next = NULL,},}
+// 可供打印的数据对象的列表
 struct {
     const char *item_name;
     struct ltx_Topic_stu *topic;
     struct ltx_Topic_subscriber_stu subscriber;
 } print_data_item_list[] = {
-    {
-        .item_name = "heart_beat",
-        .topic = &(task_heart_beat.alarm.topic),
-        .subscriber = {
-            .callback_func = print_cb_heart_beat,
-
-            .prev = NULL,
-            .next = NULL,
-        },
-    },
-
+    // 心跳任务的心跳数值
+    _P_DATA_INFO("heart_beat", &(task_heart_beat.alarm.topic), print_cb_heart_beat),
+    // 磁编码器的角度
+    _P_DATA_INFO("mag_angle", &topic_mag_read_over, print_cb_mag_angle),
+    // 磁编码器的弧度
+    _P_DATA_INFO("mag_rad", &topic_mag_read_over, print_cb_mag_rad),
 
     // 列表结尾项
     {
@@ -400,7 +422,7 @@ struct {
     },
 };
 
-// 数据更新打印订阅设置命令
+// 数据更新打印订阅设置命令。非阻塞，一旦某个数据的更新事件触发便会立即打印
 void cmd_cb_print(uint8_t argc, char *argv[]){
     if(argc < 2){
         goto Useage_print;
@@ -413,9 +435,9 @@ enum print_option_e{
 };
 
     const char *print_option_list[] = {
-        [PO_START] = "-start",
-        [PO_STOP] = "-stop",
-        [PO_LIST] = "-list",
+        [PO_START] = "-start", // 启动某一数据的更新打印
+        [PO_STOP] = "-stop", // 会直接关闭所有数据更新打印
+        [PO_LIST] = "-list", // 列出所有可被追踪打印的数据
 
         " ",
     };
@@ -633,4 +655,52 @@ void cmd_cb_pwm(uint8_t argc, char *argv[]){
     return ;
 Useage_pwm:
     LTX_LOG_INFO("Useage: %s <u(0~100)> <v> <w>\n", argv[0]);
+}
+
+
+// 直接读取磁编码器命令，调试用
+// 如果想要不影响磁编码器正常工作，则应该使用 print 命令跟踪磁编码更新来实时打印数据
+void cmd_cb_mag(uint8_t argc, char *argv[]){
+    if(argv[0][0] != '#'){
+        LTX_LOG_WARN("PERMISSION DENIED!\n");
+        return ;
+    }
+
+    // 如果有第二个参数且参数为 dma，则启动 dma 读取
+    if(argc > 1){
+        if(argv[1][0] == 'd'){
+            mt6701_read_dma(&mag_encoder_wheel);
+            LTX_LOG_INFO("Mag read dma start.\n");
+
+            return ;
+        }
+    }
+    // 阻塞读取
+    mt6701_read(&mag_encoder_wheel);
+    float angle = mt6701_trans_angle(&mag_encoder_wheel);
+    float rad = mt6701_trans_rad(&mag_encoder_wheel);
+    LTX_LOG_DEBG("Mag origin: %d, %d\n", mag_encoder_wheel.data_buffer[0], mag_encoder_wheel.data_buffer[1]);
+
+    LTX_LOG_INFO("Mag angle: %f\n", angle);
+    LTX_LOG_INFO("Mag rad: %f\n", rad);
+}
+
+// 直接设置 led 显示 rgb，阻塞发送
+void cmd_cb_led(uint8_t argc, char *argv[]){
+    if(argc < 4){
+        goto Useage_led;
+    }
+    uint16_t r, g, b;
+    sscanf(argv[1], "%hd", &r);
+    sscanf(argv[2], "%hd", &g);
+    sscanf(argv[3], "%hd", &b);
+
+    ws2812_set_1_color(&my_led, 0, (uint8_t)r, (uint8_t)g, (uint8_t)b);
+    ws2812_refresh(&my_led);
+
+    LTX_LOG_INFO("Set led to: %d %d %d\n", (uint8_t)r, (uint8_t)g, (uint8_t)b);
+
+    return ;
+Useage_led:
+    LTX_LOG_INFO("Useage: %s <r(0~255)> <g> <b>\n", argv[0]);
 }

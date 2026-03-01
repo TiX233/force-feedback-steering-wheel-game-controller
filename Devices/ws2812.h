@@ -25,6 +25,9 @@
 // #define WS2812_RST_BYTES        158
 #define WS2812_RST_BYTES        1
 
+// 计算显存数组大小宏
+#define WS2812_BUFFER_SIZE(lemp_num)    (lemp_num*12+WS2812_RST_BYTES)
+
 #define WS2812_0_CODE           0x8     // 0b1000
 #define WS2812_1_CODE           0xE     // 0b1110
 
