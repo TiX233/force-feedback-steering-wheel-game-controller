@@ -36,6 +36,7 @@
 /* Private includes ----------------------------------------------------------*/
 #include "ltx.h"
 #include "ltx_log.h"
+#include "mt6701.h"
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
@@ -137,6 +138,9 @@ void PendSV_Handler(void)
     ltx_Sys_scheduler();
 }
 
+// i2c 看门狗计数器
+extern volatile uint8_t flag_i2c_wdg;
+uint8_t mag_reg_addr = 0x03;
 /**
  * @brief  This function handles SysTick Handler.
  * @param  None
@@ -145,6 +149,23 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
     HAL_IncTick();
+
+#if 1
+    // 受不了了，画蛇添足的 i2c 多主机兼容 ip 设计你还我 cpu 性能来
+    if(flag_i2c_wdg){ // i2c 看门狗开启
+        if(flag_i2c_wdg == 1){ // i2c 未更新
+            // 修复 i2c
+            // 强制生成停止位
+            SET_BIT(I2C1->CR1, I2C_CR1_STOP);
+            __HAL_UNLOCK(&hi2c1_handler);
+            hi2c1_handler.State = HAL_I2C_STATE_READY;
+            // 重新发起 i2c 读取
+            HAL_I2C_Master_Transmit_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, &mag_reg_addr, 1);
+        }
+        // 重置计数器
+        flag_i2c_wdg = 1;
+    }
+#endif
 
     ltx_Sys_tick_tack();
 }
@@ -168,14 +189,79 @@ void DMA1_Channel1_IRQHandler(void){
     HAL_DMA_IRQHandler(hspi2_handler.hdmatx);
 }
 
-
+#ifdef USE_ADC1_IRQ
+// void ADC1_2_IRQHandler(void){
+//     GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+//     HAL_ADC_IRQHandler(&hadc1_handler);
+//     GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+// }
+extern struct ltx_Topic_stu topic_adc1_update;
+extern uint32_t adc1_buffer[5];
 void ADC1_2_IRQHandler(void){
-    HAL_ADC_IRQHandler(&hadc1_handler);
+    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+
+    // 展开 hal 库的 adc 服务函数，仅保留必要的内容
+    if(__HAL_ADC_GET_IT_SOURCE(&hadc1_handler, ADC_IT_JEOC))
+    {
+        if(ADC1->SR & ADC_FLAG_JEOC)
+        {
+            /* Update state machine on conversion status if not in error state */
+            if (HAL_IS_BIT_CLR(hadc1_handler.State, HAL_ADC_STATE_ERROR_INTERNAL))
+            {
+                /* Set ADC state */
+                SET_BIT(hadc1_handler.State, HAL_ADC_STATE_INJ_EOC);
+            }
+
+            /* Determine whether any further conversion upcoming on group injected  */
+            /* by external trigger, scan sequence on going or by automatic injected */
+            /* conversion from group regular (same conditions as group regular      */
+            /* interruption disabling above).                                       */
+            /* Note: On devices, in case of sequencer enabled               */
+            /*       (several ranks selected), end of conversion flag is raised     */
+            /*       at the end of the sequence.                                    */
+            if((READ_BIT(ADC1->CR2, ADC_CR2_JEXTSEL) == ADC_INJECTED_SOFTWARE_START)                     || 
+                (HAL_IS_BIT_CLR(ADC1->CR1, ADC_CR1_JAUTO) &&     
+                ((READ_BIT(ADC1->CR2, ADC_CR2_EXTSEL) == ADC_SOFTWARE_START)        &&
+                (hadc1_handler.Init.ContinuousConvMode == DISABLE)   )        )   )
+            {
+                /* Disable ADC end of conversion interrupt on group injected */
+                CLEAR_BIT(ADC1->CR1, ADC_IT_JEOC);
+                
+                /* Set ADC state */
+                CLEAR_BIT(hadc1_handler.State, HAL_ADC_STATE_INJ_BUSY);   
+
+                if (HAL_IS_BIT_CLR(hadc1_handler.State, HAL_ADC_STATE_REG_BUSY))
+                { 
+                    SET_BIT(hadc1_handler.State, HAL_ADC_STATE_READY);
+                }
+            }
+
+            // HAL_ADCEx_InjectedConvCpltCallback(hadc);
+            
+            adc1_buffer[0] = ADC1->JDR1;
+            adc1_buffer[1] = ADC1->JDR2;
+            adc1_buffer[2] = ADC1->JDR3;
+            HAL_ADCEx_InjectedStart_IT(&hadc1_handler);
+            // 展开发起下次采样，减少不必要的检查
+            // ADC1->CR2 |= ADC_CR2_JEXTTRIG;
+            
+            // 发布事件
+            ltx_Topic_publish(&topic_adc1_update);
+            
+            // 清除标志位
+            WRITE_REG(ADC1->SR, ~(ADC_FLAG_JSTRT | ADC_FLAG_JEOC));
+        }
+    }
+
+    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
 }
+#endif
+#if 0
+// 注入触发用不了 dma
 void DMA1_Channel2_IRQHandler(void){
     HAL_DMA_IRQHandler(hadc1_handler.DMA_Handle);
 }
-
+#endif
 
 void I2C1_EV_IRQHandler(void){
     HAL_I2C_EV_IRQHandler(&hi2c1_handler);

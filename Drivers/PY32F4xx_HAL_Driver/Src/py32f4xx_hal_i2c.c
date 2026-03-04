@@ -2107,6 +2107,9 @@ HAL_StatusTypeDef HAL_I2C_Master_Transmit_DMA(I2C_HandleTypeDef *hi2c, uint16_t 
   }
   else
   {
+    // 测试添加生成停止位
+    // SET_BIT(hi2c->Instance->CR1, I2C_CR1_STOP);
+    // __HAL_UNLOCK(hi2c);
     return HAL_BUSY;
   }
 }
@@ -3322,6 +3325,9 @@ HAL_StatusTypeDef HAL_I2C_Mem_Read_DMA(I2C_HandleTypeDef *hi2c, uint16_t DevAddr
   }
   else
   {
+    // 测试添加生成停止位
+    // SET_BIT(hi2c->Instance->CR1, I2C_CR1_STOP);
+    // __HAL_UNLOCK(hi2c);
     return HAL_BUSY;
   }
 }

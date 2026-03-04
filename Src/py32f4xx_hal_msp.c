@@ -69,7 +69,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
         GPIO_InitStruct.Alternate = GPIO_AF3_SPI2;
         HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
         /* Interrupt configuration */
-        HAL_NVIC_SetPriority(SPI2_IRQn, 2, 0);
+        HAL_NVIC_SetPriority(SPI2_IRQn, 2, 1);
         HAL_NVIC_EnableIRQ(SPI2_IRQn);
 
         /* DMA_CH1 configuration */
@@ -96,7 +96,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
         HAL_DMA_ChannelMap(&hdma1ch1_handler, DMA_CHANNEL_MAP_SPI2_WR); /* SPI2_TX DMA1_CH1 */
         
         /* DMA interrupt configuration*/
-        HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 2, 0);
+        HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 2, 1);
         HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
     }
 }
@@ -145,8 +145,10 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
         GPIO_InitStruct.Pull = GPIO_NOPULL;
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
         
-        HAL_NVIC_SetPriority(ADC1_IRQn, 1, 0);
+        #ifdef USE_ADC1_IRQ
+        HAL_NVIC_SetPriority(ADC1_IRQn, 2, 0);
         HAL_NVIC_EnableIRQ(ADC1_IRQn);
+        #endif
         
         hdma1ch2_handler.Instance                 = DMA1_Channel2;
         hdma1ch2_handler.Init.Direction           = DMA_PERIPH_TO_MEMORY;    /* Transfer mode Periph to Memory */
@@ -155,7 +157,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
         hdma1ch2_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;     /* Peripheral data alignment : Word  */
         hdma1ch2_handler.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;     /* Memory data alignment : Word  */
         hdma1ch2_handler.Init.Mode                = DMA_CIRCULAR;            /* Circular DMA mode */
-        hdma1ch2_handler.Init.Priority            = DMA_PRIORITY_VERY_HIGH;  /* Priority level : high  */
+        hdma1ch2_handler.Init.Priority            = DMA_PRIORITY_HIGH;  /* Priority level : high  */
 
         HAL_DMA_DeInit(&hdma1ch2_handler);
         HAL_DMA_Init(&hdma1ch2_handler);
@@ -163,8 +165,10 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
         HAL_DMA_ChannelMap(&hdma1ch2_handler, DMA_CHANNEL_MAP_ADC1);          /* DMA Channel Remap */
         __HAL_LINKDMA(hadc, DMA_Handle, hdma1ch2_handler);
         
-        HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 1, 0);
-        HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+        #ifdef USE_ADC1_IRQ
+        // HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 2, 0);
+        // HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+        #endif
     }
 
     // 摇杆等
@@ -241,14 +245,22 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
     __HAL_RCC_SYSCFG_CLK_ENABLE();                              /* Enable SYSCFG clock */
-    __HAL_RCC_DMA1_CLK_ENABLE();                                 /* Enable DMA clock */
-    __HAL_RCC_I2C1_CLK_ENABLE();                                /* Enable I2C clock */
     __HAL_RCC_GPIOB_CLK_ENABLE();                               /* Enable GPIOB clock */
+    __HAL_RCC_I2C1_CLK_ENABLE();                                /* Enable I2C clock */
+    __HAL_RCC_DMA1_CLK_ENABLE();                                 /* Enable DMA clock */
 
-    GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
+    // SCL
+    GPIO_InitStruct.Pin = GPIO_PIN_6;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF1_I2C1;                  /* Alternate as I2C */
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);                     /* Initialize GPIO */
+
+    // SDA
+    GPIO_InitStruct.Pin = GPIO_PIN_7;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;                     /* Open-drain mode */
-    // GPIO_InitStruct.Pull = GPIO_PULLUP;                         /* Pull-up */
-    GPIO_InitStruct.Pull = GPIO_NOPULL; // 使用外部电阻上拉
+    GPIO_InitStruct.Pull = GPIO_PULLUP;                         /* Pull-up */
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF1_I2C1;                  /* Alternate as I2C */
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);                     /* Initialize GPIO */

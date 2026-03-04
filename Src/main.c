@@ -46,7 +46,7 @@ DMA_HandleTypeDef hdma1ch1_handler;
 ADC_HandleTypeDef hadc1_handler;
 DMA_HandleTypeDef hdma1ch2_handler;
 
-uint32_t adc1_buffer[5];
+uint32_t adc1_buffer[3];
 
 ADC_HandleTypeDef hadc2_handler;
 // DMA_HandleTypeDef hdma1ch2_handler;
@@ -77,6 +77,8 @@ int main(void){
 
     /* Reset of all peripherals, Initializes the Systick */
     HAL_Init();
+    
+    HAL_NVIC_SetPriority(SysTick_IRQn, 3, 1);
 
     ltx_Log_init();
     LTX_LOG_STR("\n\nSYSTEM START\n\n");
@@ -92,8 +94,12 @@ int main(void){
             HAL_Delay(1000);
         }
     }
-    // 在 tim1 启动前开启 adc1
-    HAL_ADC_Start_DMA(&hadc1_handler, (uint32_t*)adc1_buffer, 3);
+    // trgo 才能使用 dma，而且只有 ch1 才能触发，并且不能调整采样时间点且只有 ch1 输出非 0% 或 100% 才能触发采样
+    // HAL_ADC_Start_DMA(&hadc1_handler, (uint32_t*)adc1_buffer, 3);
+    // ch4 只能注入组中断触发采样，用不了 dma，无所谓了，dma 好处是可以不产生中断就能采样更新，但是反正也得用到中断，就这样吧
+    if (HAL_ADCEx_InjectedStart_IT(&hadc1_handler) != HAL_OK){
+        while(1){ LTX_LOG_ERRO("ADC1 injected start IT Failed!\n"); HAL_Delay(1000); }
+    }
     mcu_init_adc2();
     // adc 较准
     if (HAL_ADCEx_Calibration_Start(&hadc2_handler) != HAL_OK){
@@ -248,9 +254,25 @@ static void mcu_init_tim1(void){
     HAL_TIM_PWM_Start(&htim1_handler, TIM_CHANNEL_2);
     HAL_TIM_PWM_Start(&htim1_handler, TIM_CHANNEL_3);
 
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;   // 或 TIM_OCMODE_TOGGLE，根据需求
+    sConfigOC.Pulse = 3198; // 比较值，用于调整采样的时机
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    sConfigOC.OCNPolarity  = TIM_OCNPOLARITY_HIGH;                                /* OCN channel active high */
+    sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;                              /* OC1N channel idle state is low level */
+    sConfigOC.OCIdleState  = TIM_OCIDLESTATE_RESET;                               /* OC1 channel idle state is low level */
+    if(HAL_TIM_OC_ConfigChannel(&htim1_handler, &sConfigOC, TIM_CHANNEL_4) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("Tim1 ch4 cfg Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+    HAL_TIM_OC_Start(&htim1_handler, TIM_CHANNEL_4);
+
     TIM_MasterConfigTypeDef  sMasterConfig;
 
-    sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+    sMasterConfig.MasterOutputTrigger = TIM_TRGO_OC4REF;
     sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
     HAL_TIMEx_MasterConfigSynchronization(&htim1_handler, &sMasterConfig);
     if (HAL_TIM_Base_Start(&htim1_handler) != HAL_OK){
@@ -280,7 +302,8 @@ static void mcu_init_adc1(void){
     hadc1_handler.Init.NbrOfConversion       = 3;                              /* Conversion Number */
     hadc1_handler.Init.DiscontinuousConvMode = DISABLE;                        /* Discontinuous Mode Disable */
     hadc1_handler.Init.NbrOfDiscConversion   = 1;                              /* Discontinuous Conversion Number 1 */
-    hadc1_handler.Init.ExternalTrigConv      = ADC_EXTERNALTRIGINJECCONV_T1_TRGO; // Tim1 TRGO 注入触发
+    /* regular group not used for hardware trigger here */
+    hadc1_handler.Init.ExternalTrigConv      = ADC_SOFTWARE_START; /* regular triggered by software (unused) */
 
     if (HAL_ADC_Init(&hadc1_handler) != HAL_OK){
         while(1){
@@ -297,6 +320,38 @@ static void mcu_init_adc1(void){
         while(1){
             LTX_LOG_ERRO("ADC1 ch %d init Failed!\n", adc_channel_config.Channel);
             HAL_Delay(1000);
+        }
+    }
+
+    /* 配置注入组：使用 TIM1 CC4 触发注入采样，3 个 injected rank 对应三相电流 */
+    {
+        ADC_InjectionConfTypeDef injcfg = {0};
+
+        injcfg.InjectedChannel = ADC_CHANNEL_5;
+        injcfg.InjectedRank = ADC_INJECTED_RANK_1;
+        injcfg.InjectedSamplingTime = ADC_SAMPLETIME_3CYCLES_5;
+        injcfg.InjectedOffset = 0;
+
+        injcfg.InjectedNbrOfConversion = 3;
+        injcfg.InjectedDiscontinuousConvMode = DISABLE;
+        injcfg.AutoInjectedConv = DISABLE;
+        injcfg.ExternalTrigInjecConv = ADC_EXTERNALTRIGINJECCONV_T1_CC4; /* TIM1 CC4 */
+        // injcfg.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONV_EDGE_RISING;
+
+        if (HAL_ADCEx_InjectedConfigChannel(&hadc1_handler, &injcfg) != HAL_OK){
+            while(1){ LTX_LOG_ERRO("ADC1 injected cfg Failed!\n"); HAL_Delay(1000); }
+        }
+
+        injcfg.InjectedChannel = ADC_CHANNEL_6;
+        injcfg.InjectedRank = ADC_INJECTED_RANK_2;
+        if (HAL_ADCEx_InjectedConfigChannel(&hadc1_handler, &injcfg) != HAL_OK){
+            while(1){ LTX_LOG_ERRO("ADC1 injected cfg Failed!\n"); HAL_Delay(1000); }
+        }
+
+        injcfg.InjectedChannel = ADC_CHANNEL_7;
+        injcfg.InjectedRank = ADC_INJECTED_RANK_3;
+        if (HAL_ADCEx_InjectedConfigChannel(&hadc1_handler, &injcfg) != HAL_OK){
+            while(1){ LTX_LOG_ERRO("ADC1 injected cfg Failed!\n"); HAL_Delay(1000); }
         }
     }
     
@@ -435,12 +490,21 @@ static void mcu_init_btn_pin(void){
     __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
     
+#if 0
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
+#else
+    // 测试期将按键引脚作为输出引脚测试部分功能
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+#endif
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Pin = GPIO_PIN_15;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Pin = GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
@@ -530,5 +594,20 @@ void assert_failed(uint8_t *file, uint32_t line)
     }
 }
 #endif /* USE_FULL_ASSERT */
+
+extern struct ltx_Topic_stu topic_adc1_update;
+
+/* ADC injected conversion complete callback - copy injected results to buffer */
+void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+    // adc1_buffer[0] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
+    // adc1_buffer[1] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
+    // adc1_buffer[2] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_3);
+    adc1_buffer[0] = ADC1->JDR1;
+    adc1_buffer[1] = ADC1->JDR2;
+    adc1_buffer[2] = ADC1->JDR3;
+    HAL_ADCEx_InjectedStart_IT(&hadc1_handler);
+    ltx_Topic_publish(&topic_adc1_update);
+}
 
 /************************ (C) COPYRIGHT Puya *****END OF FILE******************/

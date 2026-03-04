@@ -4,7 +4,9 @@
 #include "ltx.h"
 #include "ltx_app.h"
 #include "ltx_log.h"
+#include "ltx_script.h"
 #include "ltx_bldc.h"
+#include "ltx_foc1.h"
 #include "myAPP_system.h"
 #include "myAPP_motor.h"
 #include "myAPP_device_init.h"
@@ -30,6 +32,7 @@ void cmd_cb_adc1(uint8_t argc, char *argv[]);
 void cmd_cb_pwm(uint8_t argc, char *argv[]);
 void cmd_cb_mag(uint8_t argc, char *argv[]);
 void cmd_cb_led(uint8_t argc, char *argv[]);
+void cmd_cb_rotate(uint8_t argc, char *argv[]);
 
 ltx_Cmd_item cmd_list[] = {
     {
@@ -100,6 +103,12 @@ ltx_Cmd_item cmd_list[] = {
         .cmd_name = "led",
         .brief = "set led rgb",
         .cmd_cb = cmd_cb_led,
+    },
+
+    {
+        .cmd_name = "rotate",
+        .brief = "test svpwm algorithm",
+        .cmd_cb = cmd_cb_rotate,
     },
 
 
@@ -385,6 +394,7 @@ ltx_app_print_all_option:
 }
 
 
+extern uint32_t adc1_buffer[5];
 // 数据更新追踪打印相关内容
 // 心跳计数数据更新打印回调
 void print_cb_heart_beat(void *param){
@@ -398,6 +408,27 @@ void print_cb_mag_angle(void *param){
 // 磁编码弧度更新打印回调
 void print_cb_mag_rad(void *param){
     LTX_LOG_FMT("mr:%f\n", mag_rad);
+}
+// 磁编码弧度与三相电流原始值打印回调
+void print_cb_mag_rna(void *param){
+    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+    // 打印要占 14% 的 cpu 时间
+    LTX_LOG_FMT("ra:%f,%d,%d,%d\n", mag_rad, adc1_buffer[0], adc1_buffer[1], adc1_buffer[2]);
+    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+}
+struct ltx_Topic_stu topic_adc1_update = _LTX_TOPIC_DEAFULT_CONFIG(topic_adc1_update);
+// 三相电流原始值更新打印回调
+// uint32_t _test_cnt = 0;
+void print_cb_adc1(void *param){
+    uint32_t adc1_print[3];
+    adc1_print[0] = adc1_buffer[0];
+    adc1_print[1] = adc1_buffer[1];
+    adc1_print[2] = adc1_buffer[2];
+    // _test_cnt ++;
+    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+    // LTX_LOG_FMT("a1:%d,%d,%d,%d\n", _test_cnt, adc1_print[0], adc1_print[1], adc1_print[2]);
+    LTX_LOG_FMT("a1:%d,%d,%d\n", adc1_print[0], adc1_print[1], adc1_print[2]);
+    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
 }
 
 // 可追踪打印数据的参数信息，需要提供名字、话题指针以及打印回调
@@ -415,11 +446,13 @@ struct {
     _P_DATA_INFO("mag_angle", &topic_mag_read_over, print_cb_mag_angle),
     // 磁编码器的弧度
     _P_DATA_INFO("mag_rad", &topic_mag_read_over, print_cb_mag_rad),
+    // 磁编码器的弧度与三相电流原始值
+    _P_DATA_INFO("mag_rna", &topic_mag_read_over, print_cb_mag_rna),
+    // 三相电流原始值
+    _P_DATA_INFO("adc1", &topic_adc1_update, print_cb_adc1),
 
     // 列表结尾项
-    {
-        .item_name = " ",
-    },
+    {.item_name = " ",},
 };
 
 // 数据更新打印订阅设置命令。非阻塞，一旦某个数据的更新事件触发便会立即打印
@@ -605,24 +638,25 @@ void ltx_Cmd_process(char *cmd){
 }
 
 // adc1 测试命令
-uint32_t adc_get_counter = 0;
-extern uint32_t adc1_buffer[5];
 void cmd_cb_adc1(uint8_t argc, char *argv[]){
     // if(argv[0][0] != '#'){
     //     LTX_LOG_WARN("PERMISSION DENIED!\n");
     //     return ;
     // }
 
-    LTX_LOG_DEBG("adc1 cnt: %d\n", adc_get_counter);
     for(uint8_t i = 0; i < 3; i ++){
-        LTX_LOG_DEBG("\t[%d] = %d\n", adc1_buffer[i]);
+        LTX_LOG_DEBG("\t[%d] = %d\n", i, adc1_buffer[i]);
     }
 }
 
+#if 1
 // 测试期用 adc 接收完成回调
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
-    adc_get_counter ++;
+    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+    ltx_Topic_publish(&topic_adc1_update);
+    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
 }
+#endif
 
 // 直接设置 pwm 占空比命令，调试用
 void cmd_cb_pwm(uint8_t argc, char *argv[]){
@@ -647,10 +681,17 @@ void cmd_cb_pwm(uint8_t argc, char *argv[]){
     }
 
     LTX_LOG_INFO("Set pwm to %f%% %f%% %f%%\n", duty_u, duty_v, duty_w);
+    duty_u /= 100.0f;
+    duty_v /= 100.0f;
+    duty_w /= 100.0f;
 
     ltx_bldc_set_duty_u(motor_wheel, duty_u);
     ltx_bldc_set_duty_v(motor_wheel, duty_v);
     ltx_bldc_set_duty_w(motor_wheel, duty_w);
+
+    LTX_LOG_DEBG("1: %d\n", TIM1->CCR1);
+    LTX_LOG_DEBG("2: %d\n", TIM1->CCR2);
+    LTX_LOG_DEBG("3: %d\n", TIM1->CCR3);
 
     return ;
 Useage_pwm:
@@ -703,4 +744,143 @@ void cmd_cb_led(uint8_t argc, char *argv[]){
     return ;
 Useage_led:
     LTX_LOG_INFO("Useage: %s <r(0~255)> <g> <b>\n", argv[0]);
+}
+
+#ifndef PI
+    #define PI 3.14159265358979f
+#endif
+
+typedef enum {
+    _SVPWM_USE_10 = 0,
+    _SVPWM_USE_00 = 1,
+    _SVPWM_USE_C0 = 2,
+} _svpwm_choose_e;
+static uint8_t _svpwm_algorithm_choose = _SVPWM_USE_10;
+static float _svpwm_voltage_output_pct = 0.0f;
+static float _svpwm_rad_per_second = 0.0f;
+
+// 测试电机 svpwm 旋转算法脚本
+uint8_t flag_svpwm_test_print = 0;
+struct ltx_Script_stu script_test_svpwm_rotate;
+void script_cb_test_svpwm_rotate(struct ltx_Script_stu *script){
+    float _test_output_abc[3];
+    static float _test_rad_now = 0.0f;
+
+    ltx_Script_next_step_delay(script, 0, 1); // 1ms 后再次调用此脚本
+
+    _test_rad_now += _svpwm_rad_per_second/1000.0f;
+    if(_test_rad_now >= (2*PI)){
+        _test_rad_now = fmodf(_test_rad_now, 2*PI);
+    }
+
+    switch(_svpwm_algorithm_choose){
+        case _SVPWM_USE_10:
+            ltx_foc1_svpwm_vec10(_svpwm_voltage_output_pct, _test_rad_now, _test_output_abc);
+            break;
+            
+        case _SVPWM_USE_00:
+            ltx_foc1_svpwm_vec0(_svpwm_voltage_output_pct, _test_rad_now, _test_output_abc);
+            break;
+            
+        case _SVPWM_USE_C0:
+            // 近似算法暂时有问题，会全功率输出
+            // ltx_foc1_svpwm_vec0_close(_svpwm_voltage_output_pct, _test_rad_now, _test_output_abc);
+            _test_output_abc[0] = 0.0f;
+            _test_output_abc[1] = 0.0f;
+            _test_output_abc[2] = 0.0f;
+            break;
+
+        default:
+            _test_output_abc[0] = 0.0f;
+            _test_output_abc[1] = 0.0f;
+            _test_output_abc[2] = 0.0f;
+
+            break;
+    }
+    ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
+    ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
+    ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+    if(flag_svpwm_test_print){
+        LTX_LOG_FMT("t:%d,%d,%d\n", TIM1->CCR1, TIM1->CCR2, TIM1->CCR3);
+    }
+}
+
+// 测试电机 svpwm 旋转算法命令，会创建一个脚本来按照参数的速度和电压输出占比来旋转电机
+void cmd_cb_rotate(uint8_t argc, char *argv[]){
+    if(argv[0][0] != '#'){
+        LTX_LOG_WARN("PERMISSION DENIED!\n");
+        return ;
+    }
+    static uint8_t flag_rotate_script_is_inited = 0;
+
+    if(argc < 4){
+        goto Useage_rotate;
+    }
+
+    if(!(argv[1][0] == 's' && argv[1][1] == 'v')){
+        goto Useage_rotate;
+    }
+
+    switch(argv[1][2]){
+        case '1': // 零向量平均分配给 U0 和 U1
+            _svpwm_algorithm_choose = _SVPWM_USE_10;
+            break;
+            
+        case '0': // 使用全 U0 作为零向量
+            _svpwm_algorithm_choose = _SVPWM_USE_00;
+            
+            break;
+            
+        case 'c': // 使用近似算法版本的全 U0 作为零向量
+            _svpwm_algorithm_choose = _SVPWM_USE_C0;
+
+            break;
+            
+        case 's': // stop
+            ltx_Script_pause(&script_test_svpwm_rotate);
+            ltx_bldc_set_duty_u(motor_wheel, 0);
+            ltx_bldc_set_duty_v(motor_wheel, 0);
+            ltx_bldc_set_duty_w(motor_wheel, 0);
+
+            flag_rotate_script_is_inited = 0;
+
+            return ;
+
+            break;
+            
+        case 't': // test
+            flag_svpwm_test_print = !flag_svpwm_test_print;
+
+            return ;
+
+            break;
+
+        default:
+            goto Useage_rotate;
+    }
+
+    float _rad_per_s, _vol_output;
+    sscanf(argv[2], "%f", &_rad_per_s);
+    sscanf(argv[3], "%f", &_vol_output);
+
+    if(_vol_output > 1.0f){
+        LTX_LOG_WARN("v_pct out of range(0~1): %f\n", _vol_output);
+        goto Useage_rotate;
+    }
+
+    LTX_LOG_INFO("Set motor to %f rad/s, %f pct voltage\n", _rad_per_s, _vol_output);
+    _svpwm_rad_per_second = _rad_per_s;
+    _svpwm_voltage_output_pct = _vol_output;
+
+    // 脚本未初始化的话
+    if(!flag_rotate_script_is_inited){
+        flag_rotate_script_is_inited = 1;
+
+        ltx_Script_init(&script_test_svpwm_rotate, script_cb_test_svpwm_rotate); // 初始化脚本
+        ltx_Script_resume(&script_test_svpwm_rotate, 0); // 运行脚本
+    }
+
+    return ;
+Useage_rotate:
+    LTX_LOG_INFO("Useage: %s <sv10/sv00/svc0> <rad_per_s> <v_pct(0~1)>\n", argv[0]);
 }

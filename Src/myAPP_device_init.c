@@ -8,6 +8,7 @@
 #include "myAPP_system.h"
 #include "myAPP_led.h"
 #include "ws2812.h"
+#include "myAPP_motor.h"
 
 // 所需初始化外部硬件完成事件
 #define EVENT_INIT_LED_OVER                 0x0001
@@ -157,6 +158,8 @@ void eventg_cb_device_init_over(struct ltx_Event_group_stu *eventg){
     // 启动业务 app
     ltx_App_init(&app_led);
     ltx_App_resume(&app_led);
+
+    ltx_App_init(&app_motor);
 }
 
 

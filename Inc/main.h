@@ -42,6 +42,10 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* Private defines -----------------------------------------------------------*/
+
+// 开启 ADC1 接收完成中断
+#define USE_ADC1_IRQ
+
 /* Exported variables prototypes ---------------------------------------------*/
 extern SPI_HandleTypeDef hspi2_handler;
 extern DMA_HandleTypeDef hdma1ch1_handler;

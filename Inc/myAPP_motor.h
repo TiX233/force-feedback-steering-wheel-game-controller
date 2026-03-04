@@ -8,13 +8,13 @@
 extern struct ltx_bldc_stu motor_wheel;
 // 配置设置电机 pwm 占空比内联回调
 ltx_bldc_config_duty_u_cb(motor_wheel, {
-    TIM1->CCR1 = (uint32_t)(duty*3199); // 直接操作寄存器
+    TIM1->CCR1 = (uint32_t)((float)duty*3199); // 直接操作寄存器
 })
 ltx_bldc_config_duty_v_cb(motor_wheel, {
-    TIM1->CCR2 = (uint32_t)(duty*3199); // 直接操作寄存器
+    TIM1->CCR2 = (uint32_t)((float)duty*3199); // 直接操作寄存器
 })
 ltx_bldc_config_duty_w_cb(motor_wheel, {
-    TIM1->CCR3 = (uint32_t)(duty*3199); // 直接操作寄存器
+    TIM1->CCR3 = (uint32_t)((float)duty*3199); // 直接操作寄存器
 })
 
 // 配置转换电机 adc 值为电流值内联回调
