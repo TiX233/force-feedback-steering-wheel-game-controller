@@ -191,16 +191,16 @@ void wheel_mag_e_read_reg_dma(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *
         LTX_LOG_ERRO("mag dma read err: %d, %d\n", status, hi2c1_handler.ErrorCode);
 
         if(__HAL_I2C_GET_FLAG(&hi2c1_handler, I2C_FLAG_BUSY) != RESET){
-            LTX_LOG_DEBG("I2C b1\n");
+            LTX_LOG_DEBG("I2C e1\n");
         }
         // 修复 i2c
         // 强制生成停止位
-        SET_BIT(I2C1->CR1, I2C_CR1_STOP);
         __HAL_UNLOCK(&hi2c1_handler);
         hi2c1_handler.State = HAL_I2C_STATE_READY;
+        SET_BIT(I2C1->CR1, I2C_CR1_STOP);
         // 重新发起 i2c 读取
         if(__HAL_I2C_GET_FLAG(&hi2c1_handler, I2C_FLAG_BUSY) != RESET){
-            LTX_LOG_DEBG("I2C b2\n");
+            LTX_LOG_DEBG("I2C e2\n");
         }
         status = HAL_I2C_Master_Transmit_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, &reg_addr_for_tx, 1);
         if(status != HAL_OK){
@@ -226,8 +226,16 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c){
 #else
 // 拆分成两次中断
 void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c){
+    // 看门狗标志位 ++
+    flag_i2c_wdg ++;
     GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
-    HAL_I2C_Master_Receive_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, reg_read_buf, 2);
+    if(HAL_I2C_Master_Receive_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, reg_read_buf, 2) != HAL_OK){
+        // 强制生成停止位
+        // SET_BIT(I2C1->CR1, I2C_CR1_STOP);
+        // __HAL_UNLOCK(&hi2c1_handler);
+        // hi2c1_handler.State = HAL_I2C_STATE_READY;
+        LTX_LOG_DEBG("I2C e3\n");
+    }
 }
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c){
     // 转换角度
@@ -237,8 +245,6 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c){
     HAL_I2C_Master_Transmit_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, &reg_addr_for_tx, 1);
     // 发布角度更新事件
     ltx_Topic_publish(&topic_mag_read_over);
-    // 看门狗标志位 ++
-    flag_i2c_wdg ++;
     GPIOA->BRR = (uint32_t)GPIO_PIN_15;
 }
 #endif

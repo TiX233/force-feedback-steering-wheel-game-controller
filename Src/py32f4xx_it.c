@@ -151,6 +151,18 @@ void SysTick_Handler(void)
     HAL_IncTick();
 
 #if 1
+    if(flag_i2c_wdg){ // i2c 看门狗开启
+        if(flag_i2c_wdg == 1){ // i2c 未更新
+            // 修复 i2c
+            // 强制停止
+            HAL_I2C_Master_Abort_IT(&hi2c1_handler, MT6701_DEFAULT_ADDR);
+            // 重新发起 i2c 读取
+            HAL_I2C_Master_Transmit_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, &mag_reg_addr, 1);
+        }
+        // 重置计数器
+        flag_i2c_wdg = 1;
+    }
+#elif 0
     // 受不了了，画蛇添足的 i2c 多主机兼容 ip 设计你还我 cpu 性能来
     if(flag_i2c_wdg){ // i2c 看门狗开启
         if(flag_i2c_wdg == 1){ // i2c 未更新

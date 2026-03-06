@@ -196,7 +196,8 @@ static void mcu_init_i2c1(void){
     hi2c1_handler.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;   /* Do not enable dual address */
     /* hi2c1_handler.Init.OwnAddress2     = I2C_ADDRESS; */         /* Second address */
     hi2c1_handler.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;  /* Disable general call */
-    hi2c1_handler.Init.NoStretchMode   = I2C_NOSTRETCH_DISABLE;    /* Enable clock stretching */
+    // hi2c1_handler.Init.NoStretchMode   = I2C_NOSTRETCH_DISABLE;    /* Enable clock stretching */
+    hi2c1_handler.Init.NoStretchMode   = I2C_NOSTRETCH_ENABLE; // 禁用时钟延展，避免 scl 受到干扰时主机误以为从机要求缓一缓，从而两边都在干等对方
     if (HAL_I2C_Init(&hi2c1_handler) != HAL_OK){
         while(1){
             LTX_LOG_ERRO("I2C1 init Failed!\n");

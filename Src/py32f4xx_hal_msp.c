@@ -251,7 +251,8 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
 
     // SCL
     GPIO_InitStruct.Pin = GPIO_PIN_6;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    // GPIO_InitStruct.Mode = GPIO_MODE_AF_PP; // 开 pp 没用，示波器抓到的还是弱上拉，所以 scl 很容易被干扰，导致主机可能误认为有其他主机在操作总线，或者认为从机在请求等待
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF1_I2C1;                  /* Alternate as I2C */
