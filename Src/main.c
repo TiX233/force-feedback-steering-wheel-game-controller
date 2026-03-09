@@ -44,12 +44,10 @@ SPI_HandleTypeDef hspi2_handler;
 DMA_HandleTypeDef hdma1ch1_handler;
 
 ADC_HandleTypeDef hadc1_handler;
-DMA_HandleTypeDef hdma1ch2_handler;
-
-uint32_t adc1_buffer[3];
+// DMA_HandleTypeDef hdma1ch2_handler;
 
 ADC_HandleTypeDef hadc2_handler;
-// DMA_HandleTypeDef hdma1ch2_handler;
+DMA_HandleTypeDef hdma1ch2_handler;
 
 TIM_HandleTypeDef htim1_handler;
 
@@ -78,7 +76,14 @@ int main(void){
     /* Reset of all peripherals, Initializes the Systick */
     HAL_Init();
     
-    HAL_NVIC_SetPriority(SysTick_IRQn, 3, 1);
+    #ifdef ltx_cfg_USE_IDLE_TASK
+        // 如果需要空闲任务能力，那么需要将软中断设置为最低优先级，并且确保 systick 中断优先级比它更高
+        HAL_NVIC_SetPriority(SysTick_IRQn, 2, 1);
+        HAL_NVIC_SetPriority(PendSV_IRQn, 3, 1);
+    #else
+        // 设置 systick 为最低优先级
+        HAL_NVIC_SetPriority(SysTick_IRQn, 3, 1);
+    #endif
 
     ltx_Log_init();
     LTX_LOG_STR("\n\nSYSTEM START\n\n");
@@ -88,7 +93,7 @@ int main(void){
     mcu_init_btn_pin();
     mcu_init_adc1();
     // adc1 较准
-    if (HAL_ADCEx_Calibration_Start(&hadc1_handler) != HAL_OK){
+    if(HAL_ADCEx_Calibration_Start(&hadc1_handler) != HAL_OK){
         while(1){
             LTX_LOG_ERRO("ADC calibration Failed!\n");
             HAL_Delay(1000);
@@ -96,13 +101,13 @@ int main(void){
     }
     // trgo 才能使用 dma，而且只有 ch1 才能触发，并且不能调整采样时间点且只有 ch1 输出非 0% 或 100% 才能触发采样
     // HAL_ADC_Start_DMA(&hadc1_handler, (uint32_t*)adc1_buffer, 3);
-    // ch4 只能注入组中断触发采样，用不了 dma，无所谓了，dma 好处是可以不产生中断就能采样更新，但是反正也得用到中断，就这样吧
-    if (HAL_ADCEx_InjectedStart_IT(&hadc1_handler) != HAL_OK){
+    // ch4 只能注入组中断触发采样，用不了 dma，无所谓了，dma 还要产生两次中断搞些判断，注入组直接后台采好一次中断就好了，比 dma 还 dma
+    if(HAL_ADCEx_InjectedStart_IT(&hadc1_handler) != HAL_OK){
         while(1){ LTX_LOG_ERRO("ADC1 injected start IT Failed!\n"); HAL_Delay(1000); }
     }
     mcu_init_adc2();
     // adc 较准
-    if (HAL_ADCEx_Calibration_Start(&hadc2_handler) != HAL_OK){
+    if(HAL_ADCEx_Calibration_Start(&hadc2_handler) != HAL_OK){
         while(1){
             LTX_LOG_ERRO("ADC calibration Failed!\n");
             HAL_Delay(1000);
@@ -114,12 +119,6 @@ int main(void){
     // mcu_init_usb();
 
     LTX_LOG_INFO("MCU init over at %dms\n", ltx_Sys_get_tick());
-
-    #ifdef ltx_cfg_USE_IDLE_TASK
-    // 如果需要空闲任务能力，那么需要将软中断设置为最低优先级，并且确保 systick 中断优先级比它更高
-    HAL_NVIC_SetPriority(SysTick_IRQn, 6, 0U);
-    HAL_NVIC_SetPriority(PendSV_IRQn, 7, 0U);
-    #endif
 
     // 创建系统 app 并运行
     ltx_App_init(&app_system);
@@ -596,19 +595,5 @@ void assert_failed(uint8_t *file, uint32_t line)
 }
 #endif /* USE_FULL_ASSERT */
 
-extern struct ltx_Topic_stu topic_adc1_update;
-
-/* ADC injected conversion complete callback - copy injected results to buffer */
-void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc)
-{
-    // adc1_buffer[0] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
-    // adc1_buffer[1] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
-    // adc1_buffer[2] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_3);
-    adc1_buffer[0] = ADC1->JDR1;
-    adc1_buffer[1] = ADC1->JDR2;
-    adc1_buffer[2] = ADC1->JDR3;
-    HAL_ADCEx_InjectedStart_IT(&hadc1_handler);
-    ltx_Topic_publish(&topic_adc1_update);
-}
 
 /************************ (C) COPYRIGHT Puya *****END OF FILE******************/

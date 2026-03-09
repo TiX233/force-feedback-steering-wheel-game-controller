@@ -37,6 +37,8 @@
 #include "ltx.h"
 #include "ltx_log.h"
 #include "mt6701.h"
+#include "ltx_foc1.h"
+#include "myAPP_motor.h"
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
@@ -201,73 +203,77 @@ void DMA1_Channel1_IRQHandler(void){
     HAL_DMA_IRQHandler(hspi2_handler.hdmatx);
 }
 
-#ifdef USE_ADC1_IRQ
+int16_t adc1_offset[3];
 // void ADC1_2_IRQHandler(void){
-//     GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
 //     HAL_ADC_IRQHandler(&hadc1_handler);
-//     GPIOA->BRR = (uint32_t)GPIO_PIN_15;
 // }
-extern struct ltx_Topic_stu topic_adc1_update;
-extern uint32_t adc1_buffer[5];
 void ADC1_2_IRQHandler(void){
-    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+    // 检查是否为注入组转换结束中断（JEOC）
+    if ((ADC1->SR & ADC_FLAG_JEOC) && (ADC1->CR1 & ADC_IT_JEOC)){
 
-    // 展开 hal 库的 adc 服务函数，仅保留必要的内容
-    if(__HAL_ADC_GET_IT_SOURCE(&hadc1_handler, ADC_IT_JEOC))
-    {
-        if(ADC1->SR & ADC_FLAG_JEOC)
-        {
-            /* Update state machine on conversion status if not in error state */
-            if (HAL_IS_BIT_CLR(hadc1_handler.State, HAL_ADC_STATE_ERROR_INTERNAL))
-            {
-                /* Set ADC state */
-                SET_BIT(hadc1_handler.State, HAL_ADC_STATE_INJ_EOC);
-            }
+    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+        // 读取 adc 数值并换算电流 + 计算电流向量模长 = 0.93us
 
-            /* Determine whether any further conversion upcoming on group injected  */
-            /* by external trigger, scan sequence on going or by automatic injected */
-            /* conversion from group regular (same conditions as group regular      */
-            /* interruption disabling above).                                       */
-            /* Note: On devices, in case of sequencer enabled               */
-            /*       (several ranks selected), end of conversion flag is raised     */
-            /*       at the end of the sequence.                                    */
-            if((READ_BIT(ADC1->CR2, ADC_CR2_JEXTSEL) == ADC_INJECTED_SOFTWARE_START)                     || 
-                (HAL_IS_BIT_CLR(ADC1->CR1, ADC_CR1_JAUTO) &&     
-                ((READ_BIT(ADC1->CR2, ADC_CR2_EXTSEL) == ADC_SOFTWARE_START)        &&
-                (hadc1_handler.Init.ContinuousConvMode == DISABLE)   )        )   )
-            {
-                /* Disable ADC end of conversion interrupt on group injected */
-                CLEAR_BIT(ADC1->CR1, ADC_IT_JEOC);
-                
-                /* Set ADC state */
-                CLEAR_BIT(hadc1_handler.State, HAL_ADC_STATE_INJ_BUSY);   
+        // 读取 adc 数值并换算电流
+        adc1_buffer[1] = ADC1->JDR1;
+        adc1_buffer[2] = ADC1->JDR2;
+        adc1_buffer[0] = ADC1->JDR3;
 
-                if (HAL_IS_BIT_CLR(hadc1_handler.State, HAL_ADC_STATE_REG_BUSY))
-                { 
-                    SET_BIT(hadc1_handler.State, HAL_ADC_STATE_READY);
+        motor_foc.i_A = (adc1_buffer[0] + adc1_offset[0] - 2048.0f)*0.0008056640625f;
+        motor_foc.i_B = (adc1_buffer[1] + adc1_offset[1] - 2048.0f)*0.0008056640625f;
+        motor_foc.i_C = (adc1_buffer[2] + adc1_offset[2] - 2048.0f)*0.0008056640625f;
+
+        // 计算电流向量模长
+        motor_foc.vector_I_len = sqrtf(2.0f/3 * (motor_foc.i_A * motor_foc.i_A + motor_foc.i_B * motor_foc.i_B + motor_foc.i_C * motor_foc.i_C));
+    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+        // 计算电流向量弧度，1.52us
+
+        if(motor_foc.vector_I_len > 0.0001f){
+            // 计算电流向量弧度
+            // motor_foc.vector_I_rad = acosf(i_A / vector_I_len);
+            // if(i_B < i_C) motor_foc.vector_I_rad = (2*PI) - motor_foc.vector_I_rad;
+            // 钳位避免超越定义域 [-1, 1]
+            float ratio = motor_foc.i_A / motor_foc.vector_I_len;
+            // ratio = (ratio > 1.0f) ? 1.0f : ((ratio < -1.0f) ? -1.0f : ratio);
+            // 范围超出那就直接赋值，不用额外算反余弦
+            if(ratio < -1.0f){
+                motor_foc.vector_I_rad = PI;
+            }else if (ratio > 1.0f){
+                if(motor_foc.i_B < motor_foc.i_C){
+                    motor_foc.vector_I_rad = 2*PI;
+                }else {
+                    motor_foc.vector_I_rad = 0.0f;
                 }
+            }else {
+                motor_foc.vector_I_rad = acosf(ratio);
+                if(motor_foc.i_B < motor_foc.i_C) motor_foc.vector_I_rad = (2*PI) - motor_foc.vector_I_rad;
             }
-
-            // HAL_ADCEx_InjectedConvCpltCallback(hadc);
-            
-            adc1_buffer[0] = ADC1->JDR1;
-            adc1_buffer[1] = ADC1->JDR2;
-            adc1_buffer[2] = ADC1->JDR3;
-            HAL_ADCEx_InjectedStart_IT(&hadc1_handler);
-            // 展开发起下次采样，减少不必要的检查
-            // ADC1->CR2 |= ADC_CR2_JEXTTRIG;
-            
-            // 发布事件
-            ltx_Topic_publish(&topic_adc1_update);
-            
-            // 清除标志位
-            WRITE_REG(ADC1->SR, ~(ADC_FLAG_JSTRT | ADC_FLAG_JEOC));
         }
-    }
-
+    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+        // 用 hal 库发起下次采集的话，加上发布事件要耗时 1.3us
+        // 直接寄存器操作的话，总共耗时 0.43us
+        
+        // 发布采样完成事件
+        ltx_Topic_publish(&topic_adc1_update);
+        // 发起下次采样中断
+        // HAL_ADCEx_InjectedStart_IT(&hadc1_handler);
     // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+
+        // 启动下一次注入组采样（直接寄存器操作）
+        // 清除JEOC标志（写 1 清零，注意原代码在最后统一清除，但建议尽早清除避免重复触发）
+        ADC1->SR = ~ADC_FLAG_JEOC; // 仅清除JEOC，其他位不受影响
+        // 确保JEOC中断使能（若已使能可省略，但安全起见可再次使能）
+        ADC1->CR1 |= ADC_IT_JEOC;
+        // 软件触发注入组转换（需同时置位 JSWSTART 和 JEXTTRIG）
+        ADC1->CR2 |= (ADC_CR2_JSWSTART | ADC_CR2_JEXTTRIG);
+
+        // 清除JSTRT标志（注入组开始标志，通常不需要）
+        // ADC1->SR = ~ADC_FLAG_JSTRT;
+    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+    // 所以不包括 foc 算法的话，仅换算电流向量
+    // 采样间隔 50us，计算电流向量耗时 2.38us，占用 5.76% 的 cpu 时间
+    }
 }
-#endif
 #if 0
 // 注入触发用不了 dma
 void DMA1_Channel2_IRQHandler(void){

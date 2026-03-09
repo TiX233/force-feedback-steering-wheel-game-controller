@@ -9,8 +9,9 @@
 // 60 度的弧度值
 #define ANGLE60_TO_RAD      1.0471975511965977461542144610932f
 
-// 六向量 表
-const uint8_t six_vector_list[6][3] = {
+// 六向量 表，对于 flash 有等待的情况下，似乎不用 const 会好一点？
+const 
+uint8_t six_vector_list[6][3] = {
     [0] = {1, 0, 0},
     [1] = {1, 1, 0},
     [2] = {0, 1, 0},
@@ -42,10 +43,7 @@ void ltx_foc1_svpwm_vec10(float V_amplitude, float V_rad, float V_outputABC[]){
     float t_zero_u1;
 
     // θ = V_rad % 60度
-    theta = V_rad;
-    while(theta > ANGLE60_TO_RAD){
-        theta -= ANGLE60_TO_RAD;
-    }
+    theta = fmodf(V_rad, ANGLE60_TO_RAD);
 
     // 计算扇区
     /*
@@ -110,10 +108,7 @@ void ltx_foc1_svpwm_vec0(float V_amplitude, float V_rad, float V_outputABC[]){
     // 左右向量以外的零向量可分配的时间
 
     // θ = V_rad % 60度
-    theta = V_rad;
-    while(theta > ANGLE60_TO_RAD){
-        theta -= ANGLE60_TO_RAD;
-    }
+    theta = fmodf(V_rad, ANGLE60_TO_RAD);
 
     // 计算扇区
     sector = (uint8_t)(V_rad / ANGLE60_TO_RAD); // 不用条件判断，直接抹小数
@@ -154,10 +149,7 @@ void ltx_foc1_svpwm_vec0_close(float V_amplitude, float V_rad, float V_outputABC
     // 左右向量以外的零向量可分配的时间
 
     // θ = V_rad % 60度
-    theta = V_rad;
-    while(theta > ANGLE60_TO_RAD){
-        theta -= ANGLE60_TO_RAD;
-    }
+    theta = fmodf(V_rad, ANGLE60_TO_RAD);
 
     // 计算扇区
     sector = (uint8_t)(V_rad / ANGLE60_TO_RAD); // 不用条件判断，直接抹小数

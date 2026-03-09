@@ -5,9 +5,12 @@
 #include "ltx_pid.h"
 #include "math.h"
 
-#define PI  3.14159265358979f
+#ifndef PI
+    #define PI  3.14159265358979f
+#endif
 
 struct ltx_foc1_stu {
+    uint8_t flag_is_inited; // 初始化标志位
     uint8_t pole_pairs; // 极对数
     float current_limit; // 电流限制，例如 0.5 代表 ±0.5A
     float voltage_limit; // 电压输出限制，0~1，例如 0.5 代表以母线电压的 50% 为上限，不可超过 1
@@ -29,6 +32,7 @@ struct ltx_foc1_stu {
     float i_C;
 
     float target_I_len; // 目标输出电流向量模长占比
+    float target_I_rad; // 目标输出电流向量方向
 
     float rotater_rad; // 转子弧度，[0, 2pi)
 
@@ -36,9 +40,9 @@ struct ltx_foc1_stu {
 };
 
 // svpwm 生成算法，任选其一
-void ltx_foc1_svpwm_vec10(float V_amplitude, float V_rad, float V_outputABC[]);
-void ltx_foc1_svpwm_vec0(float V_amplitude, float V_rad, float V_outputABC[]);
-void ltx_foc1_svpwm_vec0_close(float V_amplitude, float V_rad, float V_outputABC[]);
+void ltx_foc1_svpwm_vec10(float V_amplitude, float V_rad, float V_outputABC[]); // U1 和 U0 按照特定比例分配零向量，默认平均分配
+void ltx_foc1_svpwm_vec0(float V_amplitude, float V_rad, float V_outputABC[]); // 全使用 U0 作为零向量
+void ltx_foc1_svpwm_vec0_close(float V_amplitude, float V_rad, float V_outputABC[]); // 拟合全 U0 算法，无法正常使用
 
 #define FOC_SVPWM_ALGORITHM     ltx_foc1_svpwm_vec10
 
@@ -108,20 +112,17 @@ void ltx_foc1_svpwm_vec0_close(float V_amplitude, float V_rad, float V_outputABC
     float e_rad; /* 电角度 */ \
     float rad_diff; /* 角度偏差 */ \
 \
-    /* 获取转子角度，转换电角度 */ \
-    e_rad = foc.rotater_rad * foc.pole_pairs; \
-    while(e_rad > (2*PI)){ \
-        e_rad -= (2*PI); \
-    } \
+    /* 转换转子角度匹配电角度：r*7 %2PI */ \
+    e_rad = fmodf(foc.rotater_rad * foc.pole_pairs, (2*PI)); \
 \
     /* 计算电流向量模长 */ \
     foc.vector_I_len = sqrtf(2.0f/3 * (foc.i_A * foc.i_A + foc.i_B * foc.i_B + foc.i_C * foc.i_C));\
 \
-    if(foc.vector_I_len > 0.00001f){ \
+    if(foc.vector_I_len > 0.0001f){ \
         /* 计算电流向量弧度 */ \
-        foc.vector_I_rad = acosf(foc.vector_I_len / foc.i_A); \
-        if(foc.i_B < foc.i_C) foc.vector_I_rad = (2*PI) - foc.vector_I_rad;\
-        /* 对比电流向量与转子角度的偏差。消除这个偏差就是追求的 id = 0 控制 */ \
+        foc.vector_I_rad = acosf(foc.i_A / foc.vector_I_len); \
+        if(foc.i_B < foc.i_C) foc.vector_I_rad = (2*PI) - foc.vector_I_rad; \
+        /* 对比电流向量与转子角度的偏差。保持角度差为 90 度就是追求 id = 0 控制 */ \
         rad_diff = foc.vector_I_rad - e_rad; \
         if(rad_diff < -PI){ \
             rad_diff += (2*PI); \

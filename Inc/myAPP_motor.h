@@ -31,13 +31,23 @@ ltx_bldc_config_trans_current_w_cb(motor_wheel, {
     motor_wheel.current_w = adc_val*((float)(8.058608E-4F));
 })
 
+// 电机 foc 对象
+extern struct ltx_foc1_stu motor_foc;
+
 // 磁编码器对象
 extern struct mt6701_stu mag_encoder_wheel;
 // 磁编码器所读出来的角度与弧度
 extern float mag_angle;
-extern float mag_rad;
+// extern float mag_rad;
 // 磁编码器读取完成事件话题
 extern struct ltx_Topic_stu topic_mag_read_over;
+
+// 电流 adc 原始数据
+extern uint32_t adc1_buffer[3];
+// 电流 adc 更新事件话题
+extern struct ltx_Topic_stu topic_adc1_update;
+// 电压弧度
+extern float vol_rad;
 
 extern struct ltx_App_stu app_motor;
 

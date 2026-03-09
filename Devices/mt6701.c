@@ -22,6 +22,23 @@ float mt6701_trans_angle(struct mt6701_stu *mt){
 // 转换读出来的值为弧度
 float mt6701_trans_rad(struct mt6701_stu *mt){
     uint16_t data = (mt->data_buffer[1] >> 2) + (mt->data_buffer[0] << 6);
+    float rad = data*(2*PI/16384.0f) + mt->rad_offset;
     
-    return data*(2*PI/16384.0f);
+    if(rad >= (2*PI)){
+        rad -= (2*PI);
+    }
+
+    return rad;
+}
+
+// 设置弧度偏置
+void mt6701_set_rad_offset(struct mt6701_stu *mt, float offset){
+
+    while(offset < 0.0f){
+        offset += (2*PI);
+    }
+    while(offset >= (2*PI)){
+        offset -= (2*PI);
+    }
+    mt->rad_offset = offset;
 }

@@ -28,21 +28,62 @@ struct mt6701_stu mag_encoder_wheel = {
     .read_reg_dma = wheel_mag_e_read_reg_dma,
 };
 
-// 磁编码器所读出来的角度与弧度
-float mag_angle;
-float mag_rad;
+struct ltx_foc1_stu motor_foc = {
+    .flag_is_inited = 0,
+    .pole_pairs = 7, // 极对数 7
+    .current_limit = 0.5f, // 电流限制，例如 0.5 代表 ±0.5A
+    .voltage_limit = 0.5f, // 电压输出限制，0~1，例如 0.5 代表以母线电压的 50% 为上限，不可超过 1
 
-// 测试方向盘电机对象
-struct ltx_bldc_stu motor_wheel = {
-    .id = 0,
+    .vector_I_len = 0, // 当前电流向量模长百分比，[0~1]
+    .vector_I_rad = 0, // 当前电流向量弧度，[0, 2pi)
+
+    .vector_V_len = 0, // 电压向量模长百分比，[0~1]
+    .vector_V_rad = 0, // 电压向量弧度，[0, 2pi)
+
+    .pi_theta = { // 磁场相位环
+        .kp = 0,
+        .ki = 0,
+        .integral = 0,
+        .limit = PI/2,
+    },
+    .pi_amplitude = { // 磁场强度环
+        .kp = 0,
+        .ki = 0,
+        .integral = 0,
+        .limit = 0.5,
+    },
+
+    // 三相电压输出
+    .v_outputABC[0] = 0,
+    .v_outputABC[1] = 0,
+    .v_outputABC[2] = 0,
+    // 三相采集电流
+    .i_A = 0,
+    .i_B = 0,
+    .i_C = 0,
+
+    .target_I_len = 0, // 目标输出电流向量模长占比
+
+    .rotater_rad = 0, // 转子弧度，[0, 2pi)
+
+    .dt = 0.05f, // foc 算法调用间隔，单位默认毫秒
 };
+
+// 磁编码器所读出来的机械角度与弧度
+float mag_angle;
+// float mag_rad; // 直接用 foc 对象里的成员变量
+// adc1 原始值
+uint32_t adc1_buffer[3];
+// 测试方向盘电机对象
+struct ltx_bldc_stu motor_wheel = {.id = 0,};
 
 // 电机脚本
 struct ltx_Script_stu script_motor;
 
 // 磁编码器读取完成事件话题
 struct ltx_Topic_stu topic_mag_read_over = _LTX_TOPIC_DEAFULT_CONFIG(topic_mag_read_over);
-
+// 电流 adc 更新事件话题
+struct ltx_Topic_stu topic_adc1_update = _LTX_TOPIC_DEAFULT_CONFIG(topic_adc1_update);
 
 int myApp_motor_init(struct ltx_App_stu *app){
     
@@ -157,17 +198,13 @@ void wheel_mag_e_read_reg(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_
 #if 0
 void wheel_mag_e_read_reg_dma(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num){
     
-    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
     HAL_StatusTypeDef status = HAL_I2C_Mem_Read_DMA(&hi2c1_handler, mt->addr, reg_addr, 1, reg_buffer, reg_num);
-    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
 
     // 发起 dma 读取失败
     if(status != HAL_OK){
         LTX_LOG_ERRO("mag dma read err: %d, %d\n", status, hi2c1_handler.ErrorCode);
-        // 一般会在 dma 接收完成回调里面发起下次接收，所以肯定是上次收发完成调用这里，一般不会出错
-        // 但是 py32f0 会有丢中断的情况，不知道 f4 会不会出现，目前看来也会
-        // 也就是有可能不会调用接收完成中断回调，进而不会发起下一次读取……
-        // 但是引入超时闹钟又会有额外的开销，先就这样吧
     }
 }
 #else
@@ -177,7 +214,7 @@ uint8_t *reg_read_buf;
 volatile uint8_t flag_i2c_wdg = 0;
 void wheel_mag_e_read_reg_dma(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num){
     
-    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
     reg_addr_for_tx = reg_addr;
     reg_read_buf = reg_buffer;
 
@@ -189,25 +226,8 @@ void wheel_mag_e_read_reg_dma(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *
     // 发起 dma 读取失败
     if(status != HAL_OK){
         LTX_LOG_ERRO("mag dma read err: %d, %d\n", status, hi2c1_handler.ErrorCode);
-
-        if(__HAL_I2C_GET_FLAG(&hi2c1_handler, I2C_FLAG_BUSY) != RESET){
-            LTX_LOG_DEBG("I2C e1\n");
-        }
-        // 修复 i2c
-        // 强制生成停止位
-        __HAL_UNLOCK(&hi2c1_handler);
-        hi2c1_handler.State = HAL_I2C_STATE_READY;
-        SET_BIT(I2C1->CR1, I2C_CR1_STOP);
-        // 重新发起 i2c 读取
-        if(__HAL_I2C_GET_FLAG(&hi2c1_handler, I2C_FLAG_BUSY) != RESET){
-            LTX_LOG_DEBG("I2C e2\n");
-        }
-        status = HAL_I2C_Master_Transmit_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, &reg_addr_for_tx, 1);
-        if(status != HAL_OK){
-            LTX_LOG_ERRO("Fix i2c Failed: %d, %d\n", status, hi2c1_handler.ErrorCode);
-        }
     }
-    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
 }
 #endif
 
@@ -228,7 +248,7 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c){
 void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c){
     // 看门狗标志位 ++
     flag_i2c_wdg ++;
-    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
     if(HAL_I2C_Master_Receive_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, reg_read_buf, 2) != HAL_OK){
         // 强制生成停止位
         // SET_BIT(I2C1->CR1, I2C_CR1_STOP);
@@ -240,11 +260,48 @@ void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c){
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c){
     // 转换角度
     mag_angle = mt6701_trans_angle(&mag_encoder_wheel);
-    mag_rad = mt6701_trans_rad(&mag_encoder_wheel);
+    // mag_rad = mt6701_trans_rad(&mag_encoder_wheel);
+    motor_foc.rotater_rad = mt6701_trans_rad(&mag_encoder_wheel);
     // 发起下次读取
     HAL_I2C_Master_Transmit_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, &reg_addr_for_tx, 1);
     // 发布角度更新事件
     ltx_Topic_publish(&topic_mag_read_over);
+    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+}
+#endif
+
+// 直接在中断中展开，不调用回调
+#if 0
+void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+    // adc1_buffer[1] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
+    // adc1_buffer[2] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
+    // adc1_buffer[0] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_3);
+    adc1_buffer[1] = ADC1->JDR1;
+    adc1_buffer[2] = ADC1->JDR2;
+    adc1_buffer[0] = ADC1->JDR3;
+    HAL_ADCEx_InjectedStart_IT(&hadc1_handler);
+    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+
+    int32_t mid_adc = adc1_buffer[0];
+
+    i_A = (mid_adc - 2048)*0.8056640625f;
+    mid_adc = adc1_buffer[1];
+    i_B = (mid_adc - 2048)*0.8056640625f;
+    mid_adc = adc1_buffer[2];
+    i_C = (mid_adc - 2048)*0.8056640625f;
+
+    /* 计算电流向量模长 */
+    vector_I_len = sqrtf(2.0f/3 * (i_A * i_A + i_B * i_B + i_C * i_C));
+    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+
+    if(vector_I_len > 0.00001f){
+        /* 计算电流向量弧度 */
+        elec_rad = acosf(vector_I_len / i_A);
+        if(i_B < i_C) elec_rad = (2*PI) - elec_rad;
+    }
+    ltx_Topic_publish(&topic_adc1_update);
     GPIOA->BRR = (uint32_t)GPIO_PIN_15;
 }
 #endif
