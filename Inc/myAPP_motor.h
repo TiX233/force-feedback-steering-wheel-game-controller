@@ -3,36 +3,40 @@
 
 #include "ltx_app.h"
 
+#include "ltx_foc1.h"
 #include "ltx_bldc.h"
 
-extern struct ltx_bldc_stu motor_wheel;
+// 电机 foc 对象
+extern struct ltx_foc1_stu motor_foc;
+
+// adc 较准偏移值
+extern int16_t adc1_offset[3];
+
 // 配置设置电机 pwm 占空比内联回调
-ltx_bldc_config_duty_u_cb(motor_wheel, {
+ltx_bldc_config_duty_u_cb(motor_foc, {
     TIM1->CCR1 = (uint32_t)((float)duty*3199); // 直接操作寄存器
 })
-ltx_bldc_config_duty_v_cb(motor_wheel, {
+ltx_bldc_config_duty_v_cb(motor_foc, {
     TIM1->CCR2 = (uint32_t)((float)duty*3199); // 直接操作寄存器
 })
-ltx_bldc_config_duty_w_cb(motor_wheel, {
+ltx_bldc_config_duty_w_cb(motor_foc, {
     TIM1->CCR3 = (uint32_t)((float)duty*3199); // 直接操作寄存器
 })
 
 // 配置转换电机 adc 值为电流值内联回调
-ltx_bldc_config_trans_current_u_cb(motor_wheel, {
+ltx_bldc_config_trans_current_u_cb(motor_foc, {
     // i = adc*3.3伏/(50倍*0.02欧*2^12)
-    // motor_wheel.current_u = adc_val*(3.3f/50*0.02f*4095);
-    // motor_wheel.current_u = adc_val*(3.3f/4095);
-    motor_wheel.current_u = adc_val*((float)(8.058608E-4F));
+    // motor_foc.current_u = adc_val*(3.3f/50*0.02f*4095);
+    // motor_foc.current_u = adc_val*(3.3f/4095);
+    motor_foc.i_A = (adc_val + adc1_offset[0] - 2048.0f)*0.0008056640625f;
 })
-ltx_bldc_config_trans_current_v_cb(motor_wheel, {
-    motor_wheel.current_v = adc_val*((float)(8.058608E-4F));
+ltx_bldc_config_trans_current_v_cb(motor_foc, {
+    motor_foc.i_B = (adc_val + adc1_offset[1] - 2048.0f)*0.0008056640625f;
 })
-ltx_bldc_config_trans_current_w_cb(motor_wheel, {
-    motor_wheel.current_w = adc_val*((float)(8.058608E-4F));
+ltx_bldc_config_trans_current_w_cb(motor_foc, {
+    motor_foc.i_C = (adc_val + adc1_offset[2] - 2048.0f)*0.0008056640625f;
 })
 
-// 电机 foc 对象
-extern struct ltx_foc1_stu motor_foc;
 
 // 磁编码器对象
 extern struct mt6701_stu mag_encoder_wheel;

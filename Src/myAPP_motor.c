@@ -30,27 +30,27 @@ struct mt6701_stu mag_encoder_wheel = {
 
 struct ltx_foc1_stu motor_foc = {
     .flag_is_inited = 0,
+
     .pole_pairs = 7, // 极对数 7
-    .current_limit = 0.5f, // 电流限制，例如 0.5 代表 ±0.5A
-    .voltage_limit = 0.5f, // 电压输出限制，0~1，例如 0.5 代表以母线电压的 50% 为上限，不可超过 1
 
-    .vector_I_len = 0, // 当前电流向量模长百分比，[0~1]
-    .vector_I_rad = 0, // 当前电流向量弧度，[0, 2pi)
+    .vector_I_len = 0, // 当前输出电流向量模长
+    .vector_I_rad = 0, // 当前输出电流向量弧度，[0, 2pi)
 
-    .vector_V_len = 0, // 电压向量模长百分比，[0~1]
+    .vector_V_len = 0, // 电压向量模长百分比，[0, 1]
     .vector_V_rad = 0, // 电压向量弧度，[0, 2pi)
 
-    .pi_theta = { // 磁场相位环
-        .kp = 0,
-        .ki = 0,
-        .integral = 0,
-        .limit = PI/2,
+    .pi_theta = { // 电流与转子夹角环
+        .kp = 0.01f,
+        .ki = 2.0f,
+        .error_prev = 0,
+        .theta = 0,
     },
-    .pi_amplitude = { // 磁场强度环
-        .kp = 0,
-        .ki = 0,
+    .pi_amplitude = { // 电流模长环
+        .kp = 2.0f,
+        .ki = 0.6f,
         .integral = 0,
-        .limit = 0.5,
+        .limit_u = 0.5,
+        .limit_d = 0,
     },
 
     // 三相电压输出
@@ -62,9 +62,13 @@ struct ltx_foc1_stu motor_foc = {
     .i_B = 0,
     .i_C = 0,
 
-    .target_I_len = 0, // 目标输出电流向量模长占比
+    .target_I_len = 0, // 目标 输出电流向量模长
+    .target_I_rad = PI/2, // 目标 输出电流向量与转子夹角
 
-    .rotater_rad = 0, // 转子弧度，[0, 2pi)
+    .diff_len = 0,
+    .diff_rad = PI/2,
+
+    .rotor_rad = 0, // 转子弧度，[0, 2pi)
 
     .dt = 0.05f, // foc 算法调用间隔，单位默认毫秒
 };
@@ -74,8 +78,6 @@ float mag_angle;
 // float mag_rad; // 直接用 foc 对象里的成员变量
 // adc1 原始值
 uint32_t adc1_buffer[3];
-// 测试方向盘电机对象
-struct ltx_bldc_stu motor_wheel = {.id = 0,};
 
 // 电机脚本
 struct ltx_Script_stu script_motor;
@@ -153,9 +155,9 @@ void script_cb_six_step(struct ltx_Script_stu *script){
     //     return ;
     // }
 
-    ltx_bldc_set_duty_u(motor_wheel, (six_step_list[script->step_now][0] ? TEST_DUTY_FOR_SIX_STEP : 0));
-    ltx_bldc_set_duty_v(motor_wheel, (six_step_list[script->step_now][1] ? TEST_DUTY_FOR_SIX_STEP : 0));
-    ltx_bldc_set_duty_w(motor_wheel, (six_step_list[script->step_now][2] ? TEST_DUTY_FOR_SIX_STEP : 0));
+    ltx_bldc_set_duty_u(motor_foc, (six_step_list[script->step_now][0] ? TEST_DUTY_FOR_SIX_STEP : 0));
+    ltx_bldc_set_duty_v(motor_foc, (six_step_list[script->step_now][1] ? TEST_DUTY_FOR_SIX_STEP : 0));
+    ltx_bldc_set_duty_w(motor_foc, (six_step_list[script->step_now][2] ? TEST_DUTY_FOR_SIX_STEP : 0));
 
     ltx_Script_next_step_delay(script, (script->step_now+1)%6, 100); // 100ms 换相一次
 }
@@ -181,9 +183,9 @@ void script_cb_spwm(struct ltx_Script_stu *script){
     s_angle_now_v += SPWM_ANGLE_ADD;
     s_angle_now_w += SPWM_ANGLE_ADD;
 
-    ltx_bldc_set_duty_u(motor_wheel, sinf(s_angle_now_u)*SPWM_OUTPUT_PCT);
-    ltx_bldc_set_duty_v(motor_wheel, sinf(s_angle_now_v)*SPWM_OUTPUT_PCT);
-    ltx_bldc_set_duty_w(motor_wheel, sinf(s_angle_now_w)*SPWM_OUTPUT_PCT);
+    ltx_bldc_set_duty_u(motor_foc, sinf(s_angle_now_u)*SPWM_OUTPUT_PCT);
+    ltx_bldc_set_duty_v(motor_foc, sinf(s_angle_now_v)*SPWM_OUTPUT_PCT);
+    ltx_bldc_set_duty_w(motor_foc, sinf(s_angle_now_w)*SPWM_OUTPUT_PCT);
 
     ltx_Script_next_step_delay(script, 1, 1); // 1ms 后再次切换
 }
@@ -258,12 +260,15 @@ void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c){
     }
 }
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c){
+    float rad_trans;
     // 转换角度
-    mag_angle = mt6701_trans_angle(&mag_encoder_wheel);
-    // mag_rad = mt6701_trans_rad(&mag_encoder_wheel);
-    motor_foc.rotater_rad = mt6701_trans_rad(&mag_encoder_wheel);
+    // mag_angle = mt6701_trans_angle(&mag_encoder_wheel);
+    rad_trans = mt6701_trans_rad(&mag_encoder_wheel);
     // 发起下次读取
     HAL_I2C_Master_Transmit_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, &reg_addr_for_tx, 1);
+    _LTX_IRQ_DISABLE();
+    motor_foc.rotor_rad = rad_trans;
+    _LTX_IRQ_ENABLE();
     // 发布角度更新事件
     ltx_Topic_publish(&topic_mag_read_over);
     // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
@@ -272,36 +277,121 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c){
 
 // 直接在中断中展开，不调用回调
 #if 0
-void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc)
-{
-    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
-    // adc1_buffer[1] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
-    // adc1_buffer[2] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
-    // adc1_buffer[0] = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_3);
-    adc1_buffer[1] = ADC1->JDR1;
-    adc1_buffer[2] = ADC1->JDR2;
-    adc1_buffer[0] = ADC1->JDR3;
-    HAL_ADCEx_InjectedStart_IT(&hadc1_handler);
-    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
-
-    int32_t mid_adc = adc1_buffer[0];
-
-    i_A = (mid_adc - 2048)*0.8056640625f;
-    mid_adc = adc1_buffer[1];
-    i_B = (mid_adc - 2048)*0.8056640625f;
-    mid_adc = adc1_buffer[2];
-    i_C = (mid_adc - 2048)*0.8056640625f;
-
-    /* 计算电流向量模长 */
-    vector_I_len = sqrtf(2.0f/3 * (i_A * i_A + i_B * i_B + i_C * i_C));
-    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
-
-    if(vector_I_len > 0.00001f){
-        /* 计算电流向量弧度 */
-        elec_rad = acosf(vector_I_len / i_A);
-        if(i_B < i_C) elec_rad = (2*PI) - elec_rad;
-    }
-    ltx_Topic_publish(&topic_adc1_update);
-    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc){
+    // ...
 }
 #endif
+int16_t adc1_offset[3];
+#if 0
+void ADC1_2_IRQHandler(void){
+    // 检查是否为注入组转换结束中断（JEOC）
+    if ((ADC1->SR & ADC_FLAG_JEOC) && (ADC1->CR1 & ADC_IT_JEOC)){
+
+    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+        // 读取 adc 数值并换算电流 + 计算电流向量模长 = 0.93us
+
+        // 读取 adc 数值并换算电流
+        adc1_buffer[1] = ADC1->JDR1;
+        adc1_buffer[2] = ADC1->JDR2;
+        adc1_buffer[0] = ADC1->JDR3;
+
+        motor_foc.i_A = (adc1_buffer[0] + adc1_offset[0] - 2048.0f)*0.0008056640625f;
+        motor_foc.i_B = (adc1_buffer[1] + adc1_offset[1] - 2048.0f)*0.0008056640625f;
+        motor_foc.i_C = (adc1_buffer[2] + adc1_offset[2] - 2048.0f)*0.0008056640625f;
+
+        // 计算电流向量模长
+        motor_foc.vector_I_len = sqrtf(2.0f/3 * (motor_foc.i_A * motor_foc.i_A + motor_foc.i_B * motor_foc.i_B + motor_foc.i_C * motor_foc.i_C));
+    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+        // 计算电流向量弧度，1.52us
+
+        if(motor_foc.vector_I_len > 0.0001f){
+            // 计算电流向量弧度
+            // motor_foc.vector_I_rad = acosf(i_A / vector_I_len);
+            // if(i_B < i_C) motor_foc.vector_I_rad = (2*PI) - motor_foc.vector_I_rad;
+            // 钳位避免超越定义域 [-1, 1]
+            float ratio = motor_foc.i_A / motor_foc.vector_I_len;
+            // ratio = (ratio > 1.0f) ? 1.0f : ((ratio < -1.0f) ? -1.0f : ratio);
+            // 范围超出那就直接赋值，不用额外算反余弦
+            if(ratio < -1.0f){
+                motor_foc.vector_I_rad = PI;
+            }else if (ratio > 1.0f){
+                if(motor_foc.i_B < motor_foc.i_C){
+                    motor_foc.vector_I_rad = 2*PI;
+                }else {
+                    motor_foc.vector_I_rad = 0.0f;
+                }
+            }else {
+                motor_foc.vector_I_rad = acosf(ratio);
+                if(motor_foc.i_B < motor_foc.i_C) motor_foc.vector_I_rad = (2*PI) - motor_foc.vector_I_rad;
+            }
+        }
+    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+        // 用 hal 库发起下次采集的话，加上发布事件要耗时 1.3us
+        // 直接寄存器操作的话，总共耗时 0.43us
+        
+        // 发布采样完成事件
+        ltx_Topic_publish(&topic_adc1_update);
+        // 发起下次采样中断
+        // HAL_ADCEx_InjectedStart_IT(&hadc1_handler);
+    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+
+        // 启动下一次注入组采样（直接寄存器操作）
+        // 清除JEOC标志（写 1 清零，注意原代码在最后统一清除，但建议尽早清除避免重复触发）
+        ADC1->SR = ~ADC_FLAG_JEOC; // 仅清除JEOC，其他位不受影响
+        // 确保JEOC中断使能（若已使能可省略，但安全起见可再次使能）
+        ADC1->CR1 |= ADC_IT_JEOC;
+        // 软件触发注入组转换（需同时置位 JSWSTART 和 JEXTTRIG）
+        ADC1->CR2 |= (ADC_CR2_JSWSTART | ADC_CR2_JEXTTRIG);
+
+        // 清除JSTRT标志（注入组开始标志，通常不需要）
+        // ADC1->SR = ~ADC_FLAG_JSTRT;
+    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+    // 所以不包括 foc 算法的话，仅换算电流向量
+    // 采样间隔 50us，计算电流向量耗时 2.38us，占用 5.76% 的 cpu 时间
+    }
+}
+#endif
+void ADC1_2_IRQHandler(void){
+    // 检查是否为注入组转换结束中断（JEOC）
+    if ((ADC1->SR & ADC_FLAG_JEOC) && (ADC1->CR1 & ADC_IT_JEOC)){
+
+    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+        // 读 adc 并转换三相电流耗时 0.74us，怎么硬件浮点数还这么慢，离谱
+
+        // 读取 adc 数值
+        adc1_buffer[1] = ADC1->JDR1;
+        adc1_buffer[2] = ADC1->JDR2;
+        adc1_buffer[0] = ADC1->JDR3;
+
+        // 换算 adc 值为电流
+        ltx_bldc_trans_current_u(motor_foc, adc1_buffer[0]);
+        ltx_bldc_trans_current_v(motor_foc, adc1_buffer[1]);
+        ltx_bldc_trans_current_w(motor_foc, adc1_buffer[2]);
+
+    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+        // 运行 foc 算法，耗时 8.7us
+        ltx_foc1_algorithm_1(&motor_foc);
+        
+    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+        // 计算输出以及发布事件耗时 0.56us
+
+        // 根据是否初始化来决定是否要将 foc 算法得出的三相电压值输出
+        if(motor_foc.flag_is_inited){
+            ltx_bldc_set_duty_u(motor_foc, motor_foc.v_outputABC[0]);
+            ltx_bldc_set_duty_v(motor_foc, motor_foc.v_outputABC[1]);
+            ltx_bldc_set_duty_w(motor_foc, motor_foc.v_outputABC[2]);
+        }
+
+        // 发布采样完成事件
+        ltx_Topic_publish(&topic_adc1_update);
+
+    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+        // 启动下一次注入组采样（直接寄存器操作）
+        // 清除JEOC标志（写 1 清零，注意原代码在最后统一清除，但建议尽早清除避免重复触发）
+        ADC1->SR = ~ADC_FLAG_JEOC; // 仅清除JEOC，其他位不受影响
+        // 确保JEOC中断使能（若已使能可省略，但安全起见可再次使能）
+        ADC1->CR1 |= ADC_IT_JEOC;
+        // 软件触发注入组转换（需同时置位 JSWSTART 和 JEXTTRIG）
+        ADC1->CR2 |= (ADC_CR2_JSWSTART | ADC_CR2_JEXTTRIG);
+    }
+}

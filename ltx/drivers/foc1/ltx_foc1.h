@@ -1,3 +1,13 @@
+/**
+ * @file ltx_foc1.h
+ * @author realTiX
+ * @brief foc 算法库1，目标向量以极坐标形式输入
+ * @version 0.1
+ * @date 2026-03-11 (0.1，初步完成功能设计)
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
 #ifndef __LTX_FOC1_H__
 #define __LTX_FOC1_H__
 
@@ -10,31 +20,33 @@
 #endif
 
 struct ltx_foc1_stu {
-    uint8_t flag_is_inited; // 初始化标志位
+    uint8_t flag_is_inited; // 初始化标志位，设为 1 才会进一步调用 pid 控制器，设为 0 仅计算电流向量不操作输出
+
     uint8_t pole_pairs; // 极对数
-    float current_limit; // 电流限制，例如 0.5 代表 ±0.5A
-    float voltage_limit; // 电压输出限制，0~1，例如 0.5 代表以母线电压的 50% 为上限，不可超过 1
 
-    float vector_I_len; // 电流向量模长百分比，[0~1]
-    float vector_I_rad; // 电流向量弧度，[0, 2pi)
+    float vector_I_len; // 当前电流向量模长，由 foc 算法填入，外部只应该读
+    float vector_I_rad; // 当前电流向量弧度，[0, 2pi)，由 foc 算法填入，外部只应该读
     
-    float vector_V_len; // 电压向量模长百分比，[0~1]
-    float vector_V_rad; // 电压向量弧度，[0, 2pi)
+    float vector_V_len; // 电压向量模长百分比，[0~1]，由 foc 算法填入，外部只应该读
+    float vector_V_rad; // 电压向量弧度，[0, 2pi)，由 foc 算法填入，外部只应该读
 
-    struct ltx_pid_pi_stu pi_theta; // 磁场相位环
-    struct ltx_pid_pi_stu pi_amplitude; // 磁场强度环
+    struct ltx_pid_pi_angle_stu pi_theta; // 电流与转子的夹角环
+    struct ltx_pid_pi_stu pi_amplitude; // 电流模长环，limit 不应该超过 1，即 100% 输出电压占空比
 
     // 三相电压输出
-    float v_outputABC[3];
+    float v_outputABC[3]; // svpwm 算法根据所需电压向量的模长与弧度得出的三相电压输出
     // 三相采集电流
     float i_A;
     float i_B;
     float i_C;
 
-    float target_I_len; // 目标输出电流向量模长占比
-    float target_I_rad; // 目标输出电流向量方向
+    float target_I_len; // 目标输出电流向量模长，可取负，通常上层只需要管这个就可以了
+    float target_I_rad; // 目标输出电流向量与转子方向夹角，[0, PI]，顺逆时针以电流模长正负来判断，一般设置为 PI/2，即 id = 0 控制，上层一般不需要操作它
 
-    float rotater_rad; // 转子弧度，[0, 2pi)
+    float diff_len; // 目标输出电流向量模长与实际输出模长的差，由 foc 算法填入，外部只应该读
+    float diff_rad; // 实际输出电流向量与转子方向夹角，由 foc 算法填入，外部只应该读
+
+    float rotor_rad; // 转子机械弧度，[0, 2pi)，外部填入，需要与电角度对齐零点，不需要额外乘以极对数，foc 算法会处理
 
     float dt; // foc 算法调用间隔，单位默认毫秒
 };
@@ -44,115 +56,155 @@ void ltx_foc1_svpwm_vec10(float V_amplitude, float V_rad, float V_outputABC[]); 
 void ltx_foc1_svpwm_vec0(float V_amplitude, float V_rad, float V_outputABC[]); // 全使用 U0 作为零向量
 void ltx_foc1_svpwm_vec0_close(float V_amplitude, float V_rad, float V_outputABC[]); // 拟合全 U0 算法，无法正常使用
 
-#define FOC_SVPWM_ALGORITHM     ltx_foc1_svpwm_vec10
+#define ltx_foc1_svpwm_algorithm    ltx_foc1_svpwm_vec10
 
-
-// ================== 配置 设置 pwm 占空比 用户内联回调宏 ==================
-#define ltx_foc1_config_duty_a_cb(motor, code)\
-    ltx_inline void motor##_set_duty_a(float duty) code
-#define ltx_foc1_config_duty_b_cb(motor, code)\
-    ltx_inline void motor##_set_duty_b(float duty) code
-#define ltx_foc1_config_duty_c_cb(motor, code)\
-    ltx_inline void motor##_set_duty_c(float duty) code
-
-// 样例：创建一个内联函数作为 motor1 的设置 a 路 pwm 占空比回调：
-// ltx_foc1_config_duty_a_cb(motor1, {
-//     TIM1->CCR1 = (uint32_t)(duty*1234); // 直接操作寄存器，响应更快
-//     printf("set motor1 a duty to %d", duty); // 打印
-// })
-// 创建一个内联函数作为 motor2 的设置 c 路 pwm 占空比回调：
-// ltx_foc1_config_duty_c_cb(motor2, {
-//     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, duty*5678); // 调用其他库
-// })
-
-// ================== 设置占空比 api ==================
-#define ltx_foc1_set_duty_a(motor, duty)\
-    motor##_set_duty_a(duty)
-#define ltx_foc1_set_duty_b(motor, duty)\
-    motor##_set_duty_b(duty)
-#define ltx_foc1_set_duty_c(motor, duty)\
-    motor##_set_duty_c(duty)
-
-// 使用样例：
-// ltx_foc1_set_duty_a(motor1, 0.5); // 设置电机 1 的 a 路 pwm 占空比为 50%
-// ltx_foc1_set_duty_c(motor2, 0.72); // 设置电机 2 的 c 路 pwm 占空比为 72%
-
-// ================== 配置 转换电流 用户内联回调宏 ==================
-#define ltx_foc1_config_trans_current_a_cb(motor, code)\
-    ltx_inline void motor##_trans_current_a(adc_type_t adc_val) code
-#define ltx_foc1_config_trans_current_b_cb(motor, code)\
-    ltx_inline void motor##_trans_current_b(adc_type_t adc_val) code
-#define ltx_foc1_config_trans_current_c_cb(motor, code)\
-    ltx_inline void motor##_trans_current_c(adc_type_t adc_val) code
-
-// 样例：创建一个内联函数作为 motor1 的转换 a 路 adc 数值为电流回调：
-// ltx_foc1_config_trans_current_a_cb(motor1, {
-//     motor1.i_A = adc_val * 0.1234; // 转换好后可以存储在对象成员变量中
-//     printf("motor1 u current now: %f", motor1.current_u); // 打印
-// })
-// 创建一个内联函数作为 motor2 的转换 c 路 adc 数值为电流回调：
-// ltx_foc1_config_trans_current_c_cb(motor2, {
-//     motor2.i_C = adc_val * 0.5678; // 转换好后可以存储在对象成员变量中
-// })
-
-// ================== 转换电流 api ==================
-#define ltx_bldc_trans_current_a(motor, adc_val)\
-    motor##_trans_current_a(adc_val)
-#define ltx_bldc_trans_current_b(motor, adc_val)\
-    motor##_trans_current_b(adc_val)
-#define ltx_bldc_trans_current_c(motor, adc_val)\
-    motor##_trans_current_c(adc_val)
-
-// 使用样例：
-// ltx_bldc_trans_current_a(motor1, adc1_buffer[0]); // 转换 adc 原始数据到电机 1 的 a 路电流
-// ltx_bldc_trans_current_c(motor2, adc2_buffer[2]); // 转换 adc 原始数据到电机 2 的 c 路电流
 
 // foc 算法，按 dt 定期调用，一般在 adc 采样完成回调调用，adc 一般配置为 pwm 周期触发
-#define ltx_foc1_algorithm(foc) do{\
-    float e_rad; /* 电角度 */ \
-    float rad_diff; /* 角度偏差 */ \
-\
-    /* 转换转子角度匹配电角度：r*7 %2PI */ \
-    e_rad = fmodf(foc.rotater_rad * foc.pole_pairs, (2*PI)); \
-\
-    /* 计算电流向量模长 */ \
-    foc.vector_I_len = sqrtf(2.0f/3 * (foc.i_A * foc.i_A + foc.i_B * foc.i_B + foc.i_C * foc.i_C));\
-\
-    if(foc.vector_I_len > 0.0001f){ \
-        /* 计算电流向量弧度 */ \
-        foc.vector_I_rad = acosf(foc.i_A / foc.vector_I_len); \
-        if(foc.i_B < foc.i_C) foc.vector_I_rad = (2*PI) - foc.vector_I_rad; \
-        /* 对比电流向量与转子角度的偏差。保持角度差为 90 度就是追求 id = 0 控制 */ \
-        rad_diff = foc.vector_I_rad - e_rad; \
-        if(rad_diff < -PI){ \
-            rad_diff += (2*PI); \
-        }else if(rad_diff > PI){ \
-            rad_diff -= (2*PI); \
-        } \
-\
-        /* 将角度偏差值输入 pi 控制器，获取 svpwm 下次输出的电压角度 */ \
-        /* foc.vector_V_rad = ltx_pid_pi_update(&(foc.pi_theta), rad_diff * foc.vector_I_len, foc.dt); */ \
-        foc.vector_V_rad = ltx_pid_pi_update(&(foc.pi_theta), rad_diff, foc.dt); \
-    }\
-\
-    /* 对比电流向量模长与设定输出模长的偏差。设定输出模长是由外层速度环/力矩环等 pid 控制器提供或者用户提供的 */ \
-    /* 将模长偏差输入 pi 控制器，获取 svpwm 下次输出电压模长 */ \
-    foc.vector_V_len = ltx_pid_pi_update(&(foc.pi_amplitude), target_I_len - foc.vector_I_len, foc.dt); \
-\
-    /* 计算 svpwm 输出 */ \
-    FOC_SVPWM_ALGORITHM(foc.vector_V_len, foc.vector_V_rad, foc.v_outputABC); \
-    /* 输出三相电压 */ \
-    ltx_foc1_set_duty_a(foc, foc.v_outputABC[0]); \
-    ltx_foc1_set_duty_b(foc, foc.v_outputABC[1]); \
-    ltx_foc1_set_duty_c(foc, foc.v_outputABC[2]); \
-}while(0)
+// 调用前需要用户填入 iABC，调用后由用户决定是否输出 vABC
 
-// 设置转速为弧度每秒
-void ltx_foc1_set_speed(struct ltx_foc1_stu *foc, float rad_per_s);
-// 设置力，按输出能力百分比设置，0~1
-void ltx_foc1_set_force(struct ltx_foc1_stu *foc, float f_pct);
+// 版本 1，如果要求输出负向量则直接将目标角度镜像
+ltx_inline void ltx_foc1_algorithm_1(struct ltx_foc1_stu *_foc_obj){
+    float ri_rad; // 转子匹配电角度
+    
+    // 计算电流向量模长
+    _foc_obj->vector_I_len = sqrtf(2.0f/3 * (_foc_obj->i_A * _foc_obj->i_A + _foc_obj->i_B * _foc_obj->i_B + _foc_obj->i_C * _foc_obj->i_C));
+
+    // 计算电流向量弧度
+    // _foc_obj->vector_I_rad = acosf(_foc_obj->i_A / _foc_obj->vector_I_len);
+    // if(_foc_obj->i_B < _foc_obj->i_C) _foc_obj->vector_I_rad = (2*PI) - _foc_obj->vector_I_rad;
+
+    // 钳位避免超越定义域 [-1, 1]
+    float ratio = _foc_obj->i_A / _foc_obj->vector_I_len;
+    // ratio = (ratio > 1.0f) ? 1.0f : ((ratio < -1.0f) ? -1.0f : ratio);
+    // 范围超出那就直接赋值，不用额外算反余弦
+    if(ratio < -1.0f){
+        _foc_obj->vector_I_rad = PI;
+    }else if(ratio > 1.0f){
+        if(_foc_obj->i_B < _foc_obj->i_C){
+            _foc_obj->vector_I_rad = 2*PI;
+        }else {
+            _foc_obj->vector_I_rad = 0.0f;
+        }
+    }else {
+        _foc_obj->vector_I_rad = acosf(ratio);
+        if(_foc_obj->i_B < _foc_obj->i_C) _foc_obj->vector_I_rad = (2*PI) - _foc_obj->vector_I_rad;
+    }
 
 
+    if(_foc_obj->vector_I_len < 0.006f){ // 输出较小，此时噪声占比会明显影响角度判断
+        // 角度可以不用管，等模长增长起来一点再管也来得及，或者这里也可以直接输出目标相位
+        if(_foc_obj->target_I_len < 0){ // 要求输出顺时针夹角向量
+            _foc_obj->vector_V_rad = fmodf(_foc_obj->rotor_rad * _foc_obj->pole_pairs - _foc_obj->target_I_rad, (2*PI));
+            if(_foc_obj->vector_V_rad < 0) _foc_obj->vector_V_rad += 2*PI;
+        }else { // 要求输出逆时针夹角向量
+            _foc_obj->vector_V_rad = fmodf(_foc_obj->rotor_rad * _foc_obj->pole_pairs + _foc_obj->target_I_rad, (2*PI));
+        }
+    }else { // 输出强度足够判断电流向量当前方向
+
+        // 转换转子角度匹配电角度：r*7 %2PI，并且加上目标夹角，如果要求输出负向量，那么就相当于镜像角度
+        if(_foc_obj->target_I_len < 0){
+            ri_rad = fmodf(_foc_obj->rotor_rad * _foc_obj->pole_pairs - _foc_obj->target_I_rad, (2*PI));
+            if(ri_rad < 0) ri_rad += 2*PI;
+        }else{
+            ri_rad = fmodf(_foc_obj->rotor_rad * _foc_obj->pole_pairs + _foc_obj->target_I_rad, (2*PI));
+        }
+        // 对比电流向量方向与目标角度的偏差
+        _foc_obj->diff_rad = ri_rad - _foc_obj->vector_I_rad;
+        // 归一到 [-PI, PI]，避免反转
+        if(_foc_obj->diff_rad < -PI){
+            _foc_obj->diff_rad += (2*PI);
+        }else if(_foc_obj->diff_rad > PI){
+            _foc_obj->diff_rad -= (2*PI);
+        }
+        // 将角度偏差值输入 pi 控制器，获取 svpwm 下次输出的电压角度
+        _foc_obj->vector_V_rad = ltx_pid_pi_angle_update(&(_foc_obj->pi_theta), _foc_obj->diff_rad, _foc_obj->dt);
+    }
+    _foc_obj->diff_len = fabsf(_foc_obj->target_I_len) - _foc_obj->vector_I_len;
+
+    // 将模长偏差输入 pi 控制器，获取 svpwm 下次输出的电压模长
+    _foc_obj->vector_V_len = ltx_pid_pi_update(&(_foc_obj->pi_amplitude), _foc_obj->diff_len, _foc_obj->dt);
+
+    // 计算 svpwm 输出
+    ltx_foc1_svpwm_algorithm(_foc_obj->vector_V_len, _foc_obj->vector_V_rad, _foc_obj->v_outputABC);
+}
+
+// 版本 2，如果要求输出负向量则先减低模长到 0，再镜像角度后增减模长，todo
+ltx_inline void ltx_foc1_algorithm_2(struct ltx_foc1_stu *_foc_obj){
+    float ri_rad; // 转子匹配电角度
+    float t_rad; // 中间变量
+    
+    // 计算电流向量模长
+    _foc_obj->vector_I_len = sqrtf(2.0f/3 * (_foc_obj->i_A * _foc_obj->i_A + _foc_obj->i_B * _foc_obj->i_B + _foc_obj->i_C * _foc_obj->i_C));
+
+    // 计算电流向量弧度
+    // 钳位避免超越定义域 [-1, 1]
+    float ratio = _foc_obj->i_A / _foc_obj->vector_I_len;
+    // 范围超出那就直接赋值，不用额外算反余弦
+    if(ratio < -1.0f){
+        _foc_obj->vector_I_rad = PI;
+    }else if (ratio > 1.0f){
+        if(_foc_obj->i_B < _foc_obj->i_C){
+            _foc_obj->vector_I_rad = 2*PI;
+        }else {
+            _foc_obj->vector_I_rad = 0.0f;
+        }
+    }else {
+        _foc_obj->vector_I_rad = acosf(ratio);
+        if(_foc_obj->i_B < _foc_obj->i_C) _foc_obj->vector_I_rad = (2*PI) - _foc_obj->vector_I_rad;
+    }
+
+
+    if(_foc_obj->vector_I_len < 0.006f){ // 输出较小，此时噪声占比会明显影响角度判断
+        // 直接用目标向量绝对值减当前值，角度可以不用管，等模长增长起来一点再管也来得及，或者这里也可以直接输出目标相位
+        if(_foc_obj->target_I_len < 0){ // 要求输出顺时针向量
+            _foc_obj->diff_len = _foc_obj->vector_I_len + _foc_obj->target_I_len;
+
+            // 直接输出目标相位，也可以省去，等增长模长后让夹角环 pi 控制器自己去调整
+            _foc_obj->vector_V_rad = fmodf(_foc_obj->rotor_rad * _foc_obj->pole_pairs - _foc_obj->target_I_rad, (2*PI));
+            if(_foc_obj->vector_V_rad < 0) _foc_obj->vector_V_rad += 2*PI;
+        }else { // 要求输出逆时针向量
+            _foc_obj->diff_len = _foc_obj->target_I_len - _foc_obj->vector_I_len;
+            _foc_obj->vector_V_rad = fmodf(_foc_obj->rotor_rad * _foc_obj->pole_pairs + _foc_obj->target_I_rad, (2*PI));
+        }
+        // 将模长偏差输入 pi 控制器，获取 svpwm 下次输出的电压模长
+        _foc_obj->vector_V_len = ltx_pid_pi_update(&(_foc_obj->pi_amplitude), _foc_obj->diff_len, _foc_obj->dt);
+        
+    }else { // 输出强度足够判断电流向量当前方向
+
+        // 判断当前电流向量是转子的顺逆时针侧，t_rad > 0 则为逆时针侧
+        t_rad = _foc_obj->vector_I_rad - fmodf(_foc_obj->rotor_rad * _foc_obj->pole_pairs, (2*PI));
+        if(t_rad < -PI){
+            t_rad += (2*PI);
+        }else if(t_rad > PI){
+            t_rad -= (2*PI);
+        }
+
+        // todo
+        // 如果当前输出角度与目标向量顺向，直接增减模长即可
+        // 如果当前输出角度与目标向量镜向，模长需要减少，等到接近零或者顺向后再增减
+        if(_foc_obj->target_I_len < 0){ // 要求输出顺时针向量
+            if(t_rad < 0){ // 正在输出顺时针向量，增减模长即可
+                
+            }else { // 正在输出逆时针向量，先减小模长
+
+            }
+        }else { // 要求输出逆时针向量
+            if(t_rad < 0){ // 正在输出顺时针向量，先减小模长
+                
+            }else { // 正在输出逆时针向量，增减模长即可
+
+            }
+        }
+    }
+
+    // 计算 svpwm 输出
+    ltx_foc1_svpwm_algorithm(fabsf(_foc_obj->vector_V_len), _foc_obj->vector_V_rad, _foc_obj->v_outputABC);
+}
+
+// 设置目标输出电流向量长度，可为负
+#define ltx_foc1_set_target_len(_foc_obj, len)      (_foc_obj.target_I_len = len)
+// 设置目标输出电流向量与转子的夹角，[0, PI]，顺逆时针由输出的电流向量正负决定，一般只需要设置一次 PI/2 即为 id = 0 控制
+#define ltx_foc1_set_target_rad(_foc_obj, rad)      (_foc_obj.target_I_rad = rad)
 
 
 #endif // __LTX_FOC1_H__

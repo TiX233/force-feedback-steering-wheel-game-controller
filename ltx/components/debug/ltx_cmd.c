@@ -86,7 +86,7 @@ ltx_Cmd_item cmd_list[] = {
 
     {
         .cmd_name = "pwm",
-        .brief = "set motor pwm duty",
+        .brief = "set 3 pwm duty",
         .cmd_cb = cmd_cb_pwm,
     },
 
@@ -98,7 +98,7 @@ ltx_Cmd_item cmd_list[] = {
 
     {
         .cmd_name = "mag",
-        .brief = "read mag encoder",
+        .brief = "test mag encoder",
         .cmd_cb = cmd_cb_mag,
     },
 
@@ -421,7 +421,7 @@ void print_cb_mag_angle(void *param){
 }
 // 磁编码弧度更新打印回调
 void print_cb_mag_rad(void *param){
-    LTX_LOG_FMT("mr:%f\n", motor_foc.rotater_rad);
+    LTX_LOG_FMT("mr:%f\n", motor_foc.rotor_rad);
 }
 // 三相电流原始值更新打印回调
 // uint32_t _test_cnt = 0;
@@ -438,7 +438,7 @@ void print_cb_adc1(void *param){
 }
 // 电流弧度与机械弧度
 void print_cb_am_rad(void *param){
-    float print_mag_rad = motor_foc.rotater_rad;
+    float print_mag_rad = motor_foc.rotor_rad;
     LTX_LOG_FMT("amr:%f,%f\n", motor_foc.vector_I_rad, print_mag_rad);
 }
 // 电流模长与弧度
@@ -452,6 +452,14 @@ void print_cb_iabc(void *param){
     print_ib = motor_foc.i_B;
     print_ic = motor_foc.i_C;
     LTX_LOG_FMT("i:%f,%f,%f\n", print_ia, print_ib, print_ic);
+}
+// foc 输出电流向量模长与和方向
+void print_cb_flr(void *param){
+    LTX_LOG_FMT("flr:%f,%f\n", motor_foc.vector_I_len, motor_foc.vector_I_rad);
+}
+// foc 输出电流向量模长与和转子的夹角
+void print_cb_flmr(void *param){
+    LTX_LOG_FMT("flmr:%f,%f\n", motor_foc.vector_I_len, motor_foc.target_I_rad + motor_foc.diff_rad);
 }
 
 // 可追踪打印数据的参数信息，需要提供名字、话题指针以及打印回调
@@ -477,6 +485,10 @@ struct {
     _P_DATA_INFO("alr", &topic_adc1_update, print_cb_alr),
     // 三相电流
     _P_DATA_INFO("iabc", &topic_adc1_update, print_cb_iabc),
+    // foc 输出电流向量模长和方向
+    _P_DATA_INFO("flr", &topic_adc1_update, print_cb_flr),
+    // foc 输出电流向量模长与和转子的夹角
+    _P_DATA_INFO("flmr", &topic_adc1_update, print_cb_flmr),
 
     // 列表结尾项
     {.item_name = " ",},
@@ -594,7 +606,11 @@ void cmd_cb_param(uint8_t argc, char *argv[]){
 
             for(uint8_t i = 0; param_list[i].param_name[0] != ' '; i ++){
                 if(my_str_cmp(param_list[i].param_name, argv[2]) == 0){
-                    param_list[i].param_write(&param_list[i], argv[3]);
+                    if(argv[3][0] == ':'){ // 适配 vofa 画蛇添足的冒号
+                        param_list[i].param_write(&param_list[i], &(argv[3][1]));
+                    }else {
+                        param_list[i].param_write(&param_list[i], argv[3]);
+                    }
 
                     return ;
                 }
@@ -692,9 +708,9 @@ void cmd_cb_pwm(uint8_t argc, char *argv[]){
     duty_v /= 100.0f;
     duty_w /= 100.0f;
 
-    ltx_bldc_set_duty_u(motor_wheel, duty_u);
-    ltx_bldc_set_duty_v(motor_wheel, duty_v);
-    ltx_bldc_set_duty_w(motor_wheel, duty_w);
+    ltx_bldc_set_duty_u(motor_foc, duty_u);
+    ltx_bldc_set_duty_v(motor_foc, duty_v);
+    ltx_bldc_set_duty_w(motor_foc, duty_w);
 
     LTX_LOG_DEBG("1: %d\n", TIM1->CCR1);
     LTX_LOG_DEBG("2: %d\n", TIM1->CCR2);
@@ -750,9 +766,9 @@ void cmd_cb_svpwm(uint8_t argc, char *argv[]){
             goto Useage_svpwm;
     }
 
-    ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
-    ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
-    ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+    ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+    ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+    ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
 
     LTX_LOG_INFO("Set svpwm to: l:%f, r:%f\n", sv_v_len, sv_v_rad);
 
@@ -860,9 +876,9 @@ void script_cb_test_svpwm_rotate(struct ltx_Script_stu *script){
 
             break;
     }
-    ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
-    ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
-    ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+    ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+    ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+    ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
     if(flag_svpwm_test_print){
         LTX_LOG_FMT("t:%d,%d,%d\n", TIM1->CCR1, TIM1->CCR2, TIM1->CCR3);
     }
@@ -900,9 +916,9 @@ void cmd_cb_rotate(uint8_t argc, char *argv[]){
             
         case 's': // stop
             ltx_Script_pause(&script_test_svpwm_rotate);
-            ltx_bldc_set_duty_u(motor_wheel, 0);
-            ltx_bldc_set_duty_v(motor_wheel, 0);
-            ltx_bldc_set_duty_w(motor_wheel, 0);
+            ltx_bldc_set_duty_u(motor_foc, 0);
+            ltx_bldc_set_duty_v(motor_foc, 0);
+            ltx_bldc_set_duty_w(motor_foc, 0);
 
             flag_rotate_script_is_inited = 0;
 
@@ -995,9 +1011,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
 
     if(ltx_Script_get_triger_type(script) == SC_TRIGER_RESET){ // 外部要求此脚本复位，在此处释放资源
 
-        ltx_bldc_set_duty_u(motor_wheel, 0);
-        ltx_bldc_set_duty_v(motor_wheel, 0);
-        ltx_bldc_set_duty_w(motor_wheel, 0);
+        ltx_bldc_set_duty_u(motor_foc, 0);
+        ltx_bldc_set_duty_v(motor_foc, 0);
+        ltx_bldc_set_duty_w(motor_foc, 0);
         return ;
     }
 
@@ -1006,9 +1022,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
             LTX_LOG_INFO("Start init zero align...\n");
             
             motor_foc.flag_is_inited = 0;
-            ltx_bldc_set_duty_u(motor_wheel, 0);
-            ltx_bldc_set_duty_v(motor_wheel, 0);
-            ltx_bldc_set_duty_w(motor_wheel, 0);
+            ltx_bldc_set_duty_u(motor_foc, 0);
+            ltx_bldc_set_duty_v(motor_foc, 0);
+            ltx_bldc_set_duty_w(motor_foc, 0);
             motor_stable_count = 0;
             mag_encoder_error_count = 0;
 
@@ -1054,7 +1070,7 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
                 LTX_LOG_INFO("Rotate motor to align zero...\n");
                 return ;
             }
-            if(((last_mag_rad - motor_foc.rotater_rad) > 0.001f) || ((last_mag_rad - motor_foc.rotater_rad) < -0.001f)){ // 电机有动作
+            if(((last_mag_rad - motor_foc.rotor_rad) > 0.001f) || ((last_mag_rad - motor_foc.rotor_rad) < -0.001f)){ // 电机有动作
                 motor_stable_count = 0;
                 adc1_offset_count[0] = 0;
                 adc1_offset_count[1] = 0;
@@ -1066,7 +1082,7 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
                 adc1_offset_count[2] += 2048.0f - adc1_buffer[2];
                 motor_stable_count ++;
             }
-            last_mag_rad = motor_foc.rotater_rad;
+            last_mag_rad = motor_foc.rotor_rad;
             
             ltx_Script_next_step_delay(script, 2, 1); // 1ms 后再次检测
 
@@ -1075,9 +1091,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
         case 3: // 准备开始进行零点较准算法
             mt6701_set_rad_offset(&mag_encoder_wheel, 0); // 清除原有机械角度偏置
             ltx_foc1_svpwm_vec0(0.2, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
-            ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
-            ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
-            ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
             motor_stable_count = 0; // 清除电机位置稳定计数器
             pole_flags = 0; // 清除极对位
             ltx_Script_next_step_delay(script, 9, 1000); // 等待电机稳定
@@ -1086,14 +1102,14 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
 
         case 4: // 等待电机旋转到稳定的位置
             
-            if(((last_mag_rad - motor_foc.rotater_rad) > 0.001f) || ((last_mag_rad - motor_foc.rotater_rad) < -0.001f)){ // 电机还没停住或者用户用手触碰了
+            if(((last_mag_rad - motor_foc.rotor_rad) > 0.001f) || ((last_mag_rad - motor_foc.rotor_rad) < -0.001f)){ // 电机还没停住或者用户用手触碰了
                 // 重新等待
                 motor_stable_count = 0;
                 average_elec_rad = 0;
             }else {
                 motor_stable_count ++;
             }
-            last_mag_rad = motor_foc.rotater_rad;
+            last_mag_rad = motor_foc.rotor_rad;
 
             if(motor_stable_count > 10){ // 电机已经稳定
                 average_elec_rad += motor_foc.vector_I_rad; // 取 20 个电角度的平均值
@@ -1102,10 +1118,10 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
                     // 计算是在哪个极对
                     // 应该加个超次数计数，不然如果磁编码器不在线的话就只会计算某个极对一直无法完成初始化
                     // 无所谓了，磁编码器要是不在线反正后续也用不了，电机一直转不结束让用户察觉也正好。
-                    pole_now = (uint8_t)(motor_foc.rotater_rad*7 / (2*PI));
+                    pole_now = (uint8_t)(motor_foc.rotor_rad*7 / (2*PI));
                     if(pole_now > 6) pole_now = 0;
                     // 将其存入列表
-                    zero_align_list[pole_now] = average_elec_rad - fmodf(motor_foc.rotater_rad*7, (2*PI));
+                    zero_align_list[pole_now] = average_elec_rad - fmodf(motor_foc.rotor_rad*7, (2*PI));
                     pole_flags |= 1<<pole_now;
                     LTX_LOG_INFO("Zero align[%d]: %f\n", pole_now, zero_align_list[pole_now]);
 
@@ -1147,9 +1163,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
 
         case 5: // 旋转极对，旋转 PI/2 弧度
             ltx_foc1_svpwm_vec0(0.2, PI/2, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
-            ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
-            ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
-            ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
 
             ltx_Script_next_step_delay(script, 6, 200);
 
@@ -1157,9 +1173,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
 
         case 6: // 旋转极对，旋转 PI 弧度
             ltx_foc1_svpwm_vec0(0.2, PI, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
-            ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
-            ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
-            ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
 
             ltx_Script_next_step_delay(script, 7, 200);
 
@@ -1167,9 +1183,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
 
         case 7: // 旋转极对，旋转 PI/2*3 弧度
             ltx_foc1_svpwm_vec0(0.2, PI/2*3, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
-            ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
-            ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
-            ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
 
             ltx_Script_next_step_delay(script, 8, 200);
 
@@ -1177,9 +1193,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
 
         case 8: // 旋转极对，旋转 2PI 弧度
             ltx_foc1_svpwm_vec0(0.2, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
-            ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
-            ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
-            ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
 
             // 进入新极对较准
             ltx_Script_next_step_delay(script, 9, 200);
@@ -1188,9 +1204,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
 
         case 9: // 加强输出力
             ltx_foc1_svpwm_vec0(0.35, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
-            ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
-            ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
-            ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
 
             // 进入新极对较准
             ltx_Script_next_step_delay(script, 4, 600);
@@ -1199,9 +1215,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
 
         case 10: // 减弱输出力
             ltx_foc1_svpwm_vec0(0.2, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
-            ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
-            ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
-            ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
 
             // 进入极对切换
             ltx_Script_next_step_delay(script, 5, 200);
@@ -1210,9 +1226,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
 
         case 11: // 脚本结束，逐渐减弱驱动力
             ltx_foc1_svpwm_vec0(0.2, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
-            ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
-            ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
-            ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
 
             // 进入极对切换
             ltx_Script_next_step_delay(script, 12, 200);
@@ -1221,9 +1237,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
 
         case 12: // 脚本结束，逐渐减弱驱动力
             ltx_foc1_svpwm_vec0(0.1, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
-            ltx_bldc_set_duty_u(motor_wheel, _test_output_abc[0]);
-            ltx_bldc_set_duty_v(motor_wheel, _test_output_abc[1]);
-            ltx_bldc_set_duty_w(motor_wheel, _test_output_abc[2]);
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
 
             // 进入极对切换
             ltx_Script_next_step_delay(script, 13, 200);
@@ -1231,9 +1247,9 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
             break;
 
         case 13: // 脚本结束，关闭输出
-            ltx_bldc_set_duty_u(motor_wheel, 0);
-            ltx_bldc_set_duty_v(motor_wheel, 0);
-            ltx_bldc_set_duty_w(motor_wheel, 0);
+            ltx_bldc_set_duty_u(motor_foc, 0);
+            ltx_bldc_set_duty_v(motor_foc, 0);
+            ltx_bldc_set_duty_w(motor_foc, 0);
 
             // 结束脚本
             ltx_Script_next_step_over(script);

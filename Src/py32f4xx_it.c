@@ -37,7 +37,6 @@
 #include "ltx.h"
 #include "ltx_log.h"
 #include "mt6701.h"
-#include "ltx_foc1.h"
 #include "myAPP_motor.h"
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -203,77 +202,9 @@ void DMA1_Channel1_IRQHandler(void){
     HAL_DMA_IRQHandler(hspi2_handler.hdmatx);
 }
 
-int16_t adc1_offset[3];
 // void ADC1_2_IRQHandler(void){
 //     HAL_ADC_IRQHandler(&hadc1_handler);
 // }
-void ADC1_2_IRQHandler(void){
-    // 检查是否为注入组转换结束中断（JEOC）
-    if ((ADC1->SR & ADC_FLAG_JEOC) && (ADC1->CR1 & ADC_IT_JEOC)){
-
-    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
-        // 读取 adc 数值并换算电流 + 计算电流向量模长 = 0.93us
-
-        // 读取 adc 数值并换算电流
-        adc1_buffer[1] = ADC1->JDR1;
-        adc1_buffer[2] = ADC1->JDR2;
-        adc1_buffer[0] = ADC1->JDR3;
-
-        motor_foc.i_A = (adc1_buffer[0] + adc1_offset[0] - 2048.0f)*0.0008056640625f;
-        motor_foc.i_B = (adc1_buffer[1] + adc1_offset[1] - 2048.0f)*0.0008056640625f;
-        motor_foc.i_C = (adc1_buffer[2] + adc1_offset[2] - 2048.0f)*0.0008056640625f;
-
-        // 计算电流向量模长
-        motor_foc.vector_I_len = sqrtf(2.0f/3 * (motor_foc.i_A * motor_foc.i_A + motor_foc.i_B * motor_foc.i_B + motor_foc.i_C * motor_foc.i_C));
-    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
-        // 计算电流向量弧度，1.52us
-
-        if(motor_foc.vector_I_len > 0.0001f){
-            // 计算电流向量弧度
-            // motor_foc.vector_I_rad = acosf(i_A / vector_I_len);
-            // if(i_B < i_C) motor_foc.vector_I_rad = (2*PI) - motor_foc.vector_I_rad;
-            // 钳位避免超越定义域 [-1, 1]
-            float ratio = motor_foc.i_A / motor_foc.vector_I_len;
-            // ratio = (ratio > 1.0f) ? 1.0f : ((ratio < -1.0f) ? -1.0f : ratio);
-            // 范围超出那就直接赋值，不用额外算反余弦
-            if(ratio < -1.0f){
-                motor_foc.vector_I_rad = PI;
-            }else if (ratio > 1.0f){
-                if(motor_foc.i_B < motor_foc.i_C){
-                    motor_foc.vector_I_rad = 2*PI;
-                }else {
-                    motor_foc.vector_I_rad = 0.0f;
-                }
-            }else {
-                motor_foc.vector_I_rad = acosf(ratio);
-                if(motor_foc.i_B < motor_foc.i_C) motor_foc.vector_I_rad = (2*PI) - motor_foc.vector_I_rad;
-            }
-        }
-    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
-        // 用 hal 库发起下次采集的话，加上发布事件要耗时 1.3us
-        // 直接寄存器操作的话，总共耗时 0.43us
-        
-        // 发布采样完成事件
-        ltx_Topic_publish(&topic_adc1_update);
-        // 发起下次采样中断
-        // HAL_ADCEx_InjectedStart_IT(&hadc1_handler);
-    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
-
-        // 启动下一次注入组采样（直接寄存器操作）
-        // 清除JEOC标志（写 1 清零，注意原代码在最后统一清除，但建议尽早清除避免重复触发）
-        ADC1->SR = ~ADC_FLAG_JEOC; // 仅清除JEOC，其他位不受影响
-        // 确保JEOC中断使能（若已使能可省略，但安全起见可再次使能）
-        ADC1->CR1 |= ADC_IT_JEOC;
-        // 软件触发注入组转换（需同时置位 JSWSTART 和 JEXTTRIG）
-        ADC1->CR2 |= (ADC_CR2_JSWSTART | ADC_CR2_JEXTTRIG);
-
-        // 清除JSTRT标志（注入组开始标志，通常不需要）
-        // ADC1->SR = ~ADC_FLAG_JSTRT;
-    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
-    // 所以不包括 foc 算法的话，仅换算电流向量
-    // 采样间隔 50us，计算电流向量耗时 2.38us，占用 5.76% 的 cpu 时间
-    }
-}
 #if 0
 // 注入触发用不了 dma
 void DMA1_Channel2_IRQHandler(void){

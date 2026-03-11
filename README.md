@@ -1,19 +1,26 @@
 # 力反馈方向盘手柄，带挡杆
 
+- [力反馈方向盘手柄，带挡杆](#力反馈方向盘手柄带挡杆)
+  - [一、项目简介](#一项目简介)
+  - [二、开源管理](#二开源管理)
+  - [三、烧录](#三烧录)
+  - [四、调试](#四调试)
+  - [五、其他](#五其他)
 
 ## 一、项目简介
 
 ## 二、开源管理
 
-本仓库负责管理本项目的单片机代码部分，所有部分开源链接如下：
+本仓库负责管理本项目的单片机源码部分，所有部分开源链接如下：
 
-* 单片机代码：
-  * Github：[TiX233/](https://github.com/TiX233/)
-  * Gitee：[TiX233/](https://gitee.com/TiX233/)
+* 单片机源码：
+  * Github：[TiX233/force-feedback-steering-wheel-game-controller](https://github.com/TiX233/force-feedback-steering-wheel-game-controller)
+  * Gitee：[TiX233/force-feedback-steering-wheel-game-controller](https://gitee.com/TiX233/force-feedback-steering-wheel-game-controller)
 * 原理图/PCB：
-  * 立创开源平台：[](https://oshwhub.com/realtix/)
+  * 立创开源平台：[力反馈方向盘手柄，带挡杆](https://oshwhub.com/realtix/ffb_wheel_handle)
 * 外壳：
-  * MakerWorld：[@realTiX - ](https://makerworld.com.cn/zh/@realTiX)
+  * 立创开源平台附件
+  * MakerWorld：[@realTiX - 力反馈方向盘手柄，带挡杆](https://makerworld.com.cn/zh/@realTiX)
 
 ## 三、烧录
 
@@ -35,7 +42,7 @@
 4. 链接成功后，即可查看输入输出信息
 
 通过自定义命令，可控制单片机的运行状态，比如暂停某些 app 等等，也可依赖发布订阅机制实现数据更新后的自动打印，在 `ltx_cmd.c` 中提供的 `/print` 命令有一个 `heart_beat` 样例，用来每秒打印心跳，您可参考该样例来设置自己的订阅数据打印；  
-如果您需要经常修改一些参数如尝试某些不同的背景颜色，那么也无需重新烧录，在 `ltx_cmd.c` 中提供了一个 `/param` 命令，该命令可对 `ltx_param.c` 中指向的自定义数据进行读写；
+如果您需要经常修改一些变量如尝试某些不同的 pid 参数，那么也无需重新烧录，在 `ltx_cmd.c` 中提供了一个 `/param` 命令，该命令可对 `ltx_param.c` 中指向的自定义数据进行读写；
 
 所有的自定义命令可在 `ltx_cmd.c` 中查看，也可开机后给单片机发送 `/help` 命令来列出所有命令，您也可以参考这些命令创建一些方便调试自定义命令，以下是目前所有的自定义命令，部分命令可能会影响系统的正常运行：
 
@@ -44,7 +51,7 @@
 | `echo` | 返回第二个参数来测试收发功能 |
 | `hello` | 打印 hello world |
 | `help` | 帮助，无参数则列出所有命令，第二个参数可设置为某个命令（如 `/help print`） |
-| `print` | 在某些数据更新后进行打印，非阻塞，非 poll，依赖 ltx 发布订阅机制 |
+| `print` | 配置某些数据更新后进行打印，非阻塞，非 poll，依赖 ltx 发布订阅机制 |
 | `param` | 读写自定义参数 |
 | `alarm` | 测试 ltx 闹钟功能用，非阻塞，第二个参数可设置闹钟倒计时 tick，会在闹钟到时后打印 |
 | `reboot` | 重启 |
