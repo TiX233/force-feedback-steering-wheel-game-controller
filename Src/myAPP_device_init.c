@@ -9,10 +9,11 @@
 #include "myAPP_led.h"
 #include "ws2812.h"
 #include "myAPP_motor.h"
+#include "mt6701.h"
 
 // 所需初始化外部硬件完成事件
 #define EVENT_INIT_LED_OVER                 0x0001
-#define EVENT_INIT_MAG_ENCODER_OVER         0x0002
+#define EVENT_INIT_MOTOR_OVER               0x0002
 
 // 函数声明
 // led 初始化脚本回调
@@ -24,8 +25,11 @@ void eventg_cb_device_init_over(struct ltx_Event_group_stu *event);
 void my_led_cb_send_data(struct ws2812_stu *led, uint8_t *buffer, uint16_t size);
 void my_led_cb_send_data_dma(struct ws2812_stu *led, uint8_t *buffer, uint16_t size);
 
-uint8_t my_led_display_buffer[WS2812_BUFFER_SIZE(1)];
+// 零点对齐脚本
+void script_cb_zero_align(struct ltx_Script_stu *script);
 
+// ws2812 对象
+uint8_t my_led_display_buffer[WS2812_BUFFER_SIZE(1)];
 struct ws2812_stu my_led = {
     .buffer = my_led_display_buffer,
     .lemp_num = 1,
@@ -43,11 +47,15 @@ struct ltx_Event_group_stu eventg_device_init_over;
 // led 初始化脚本对象结构体
 struct ltx_Script_stu script_led_init;
 
+// 计算每个极对平均偏差对齐电角度与机械角度的脚本
+struct ltx_Script_stu script_zero_align;
+
 
 // app 相关
 int myAPP_device_init_init(struct ltx_App_stu *app){
     // 创建指示灯初始脚本
     ltx_Script_init(&script_led_init, script_cb_led_init);
+    ltx_Script_init(&script_zero_align, script_cb_zero_align);
 
     // 创建所有外部硬件初始化完成事件组
     ltx_Event_group_init(&eventg_device_init_over, eventg_cb_device_init_over, EVENT_INIT_LED_OVER \
@@ -119,6 +127,9 @@ void script_cb_led_init(struct ltx_Script_stu *script){
             // 发送完成触发
             ltx_Event_group_publish(&eventg_device_init_over, EVENT_INIT_LED_OVER); // 发布初始化 led 完成事件
             ltx_Script_next_step_over(script); // 结束脚本
+            // 开启 led 管理 app
+            ltx_App_init(&app_led);
+            ltx_App_resume(&app_led);
 
             break;
 
@@ -130,6 +141,9 @@ void script_cb_led_init(struct ltx_Script_stu *script){
             // 发送完成触发
             ltx_Event_group_publish(&eventg_device_init_over, EVENT_INIT_LED_OVER); // 发布初始化 led 完成事件
             ltx_Script_next_step_over(script); // 结束脚本
+            // 开启 led 管理 app
+            ltx_App_init(&app_led);
+            ltx_App_resume(&app_led);
 
             break;
 
@@ -139,6 +153,285 @@ void script_cb_led_init(struct ltx_Script_stu *script){
     }
 
 }
+
+float zero_align_list[7];
+float adc1_offset_count[3];
+
+// 计算每个极对平均偏差对齐电角度与机械角度的脚本回调
+void script_cb_zero_align(struct ltx_Script_stu *script){
+    #if 0
+    static uint8_t mag_encoder_error_count = 0;
+    static uint8_t motor_stable_count = 0; // 机械角度稳定计数
+    static uint8_t elec_stable_count = 0; // 电角度稳定计数
+    static float last_mag_rad = 0;
+    static float average_elec_rad = 0;
+    uint8_t pole_now = 0; // 当前极对
+    static uint8_t pole_flags = 0; // 已较准的极对
+    static uint8_t mag_rad_in7 = 0; // 机械角度转换到电角度正在七个极对中的哪个
+    static float mag_rad_times7mod2pi = 0; // 机械角度转换到电角度
+
+    float _test_output_abc[3];
+    float align_rad_min;
+    float align_rad_max;
+    float align_rad_average;
+
+
+    if(ltx_Script_get_triger_type(script) == SC_TRIGER_RESET){ // 外部要求此脚本复位，在此处释放资源
+
+        ltx_bldc_set_duty_u(motor_foc, 0);
+        ltx_bldc_set_duty_v(motor_foc, 0);
+        ltx_bldc_set_duty_w(motor_foc, 0);
+        return ;
+    }
+
+    switch(script->step_now){
+        case 0: // 初始化
+            LTX_LOG_INFO("Start init zero align...\n");
+            
+            motor_foc.flag_is_inited = 0;
+            ltx_bldc_set_duty_u(motor_foc, 0);
+            ltx_bldc_set_duty_v(motor_foc, 0);
+            ltx_bldc_set_duty_w(motor_foc, 0);
+            motor_stable_count = 0;
+            mag_encoder_error_count = 0;
+
+            // 下一步等待磁编码器数据发布
+            LTX_LOG_INFO("Try get mag encoder data...\n");
+            ltx_Script_next_step_topic(script, 1, 5, &topic_mag_read_over);
+            break;
+
+        case 1: // 检测磁编码器通信是否正常
+            if(ltx_Script_get_triger_type(script) == SC_TRIGER_TIMEOUT){ // 等待磁编码器数据超时，磁编码器 i2c 可能不正常
+                if(mag_encoder_error_count++ > 100){ // 等待磁编码器数据超时次数过多，判定为磁编码器通信异常
+                    LTX_LOG_ERRO("Mag encoder comunication Failed!\n");
+
+                    // 结束此脚本
+                    ltx_Script_next_step_over(script);
+                    return ;
+                }
+                ltx_Script_next_step_topic(script, 1, 3, &topic_mag_read_over);
+                return ;
+            }
+            LTX_LOG_INFO("Waitting for motor stable...\n");
+            ltx_Script_next_step_delay(script, 2, 500);
+
+            break;
+
+        case 2: // 等待电机稳定
+            if(motor_stable_count >= 100){ // 电机已经保持了 100ms 没有动作
+                adc1_offset[0] = (int16_t)(adc1_offset_count[0] / 100.0f);
+                adc1_offset[1] = (int16_t)(adc1_offset_count[1] / 100.0f);
+                adc1_offset[2] = (int16_t)(adc1_offset_count[2] / 100.0f);
+                LTX_LOG_INFO("ADC1 offset: %d, %d, %d\n", adc1_offset[0], adc1_offset[1], adc1_offset[2]);
+                if((abs(adc1_offset[0]) > 100) || (abs(adc1_offset[1]) > 100) || (abs(adc1_offset[2]) > 100)){ // 电机 ADC 较准偏移值过大
+                    LTX_LOG_ERRO("Motor adc offset too large!\n");
+                    adc1_offset[0] = 0;
+                    adc1_offset[1] = 0;
+                    adc1_offset[2] = 0;
+                    // 结束此脚本
+                    ltx_Script_next_step_over(script);
+                    return ;
+                }
+                // 进入下一步操作
+                ltx_Script_next_step_topic(script, 3, 5, &topic_mag_read_over);
+                LTX_LOG_INFO("Rotate motor to align zero...\n");
+                return ;
+            }
+            if(((last_mag_rad - motor_foc.rotor_rad) > 0.001f) || ((last_mag_rad - motor_foc.rotor_rad) < -0.001f)){ // 电机有动作
+                motor_stable_count = 0;
+                adc1_offset_count[0] = 0;
+                adc1_offset_count[1] = 0;
+                adc1_offset_count[2] = 0;
+            }else { // 电机未动
+                // 计算 adc 较准偏置，取 100 次平均值
+                adc1_offset_count[0] += 2048.0f - adc1_buffer[0];
+                adc1_offset_count[1] += 2048.0f - adc1_buffer[1];
+                adc1_offset_count[2] += 2048.0f - adc1_buffer[2];
+                motor_stable_count ++;
+            }
+            last_mag_rad = motor_foc.rotor_rad;
+            
+            ltx_Script_next_step_delay(script, 2, 1); // 1ms 后再次检测
+
+            break;
+
+        case 3: // 准备开始进行零点较准算法
+            mt6701_set_rad_offset(&mag_encoder_wheel, 0); // 清除原有机械角度偏置
+            ltx_foc1_svpwm_vec0(0.2, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
+            motor_stable_count = 0; // 清除电机位置稳定计数器
+            pole_flags = 0; // 清除极对位
+            ltx_Script_next_step_delay(script, 9, 1000); // 等待电机稳定
+
+            break;
+
+        case 4: // 等待电机旋转到稳定的位置
+            
+            if(((last_mag_rad - motor_foc.rotor_rad) > 0.001f) || ((last_mag_rad - motor_foc.rotor_rad) < -0.001f)){ // 电机还没停住或者用户用手触碰了
+                // 重新等待
+                motor_stable_count = 0;
+                average_elec_rad = 0;
+            }else {
+                motor_stable_count ++;
+            }
+            last_mag_rad = motor_foc.rotor_rad;
+
+            if(motor_stable_count > 10){ // 电机已经稳定
+                average_elec_rad += motor_foc.vector_I_rad; // 取 20 个电角度的平均值
+                if(motor_stable_count > 30){ // 够 20 个了
+                    average_elec_rad /= 20.0f;
+                    // 计算是在哪个极对
+                    // 应该加个超次数计数，不然如果磁编码器不在线的话就只会计算某个极对一直无法完成初始化
+                    // 无所谓了，磁编码器要是不在线反正后续也用不了，电机一直转不结束让用户察觉也正好。
+                    pole_now = (uint8_t)(motor_foc.rotor_rad*7 / (2*PI));
+                    if(pole_now > 6) pole_now = 0;
+                    // 将其存入列表
+                    zero_align_list[pole_now] = average_elec_rad - fmodf(motor_foc.rotor_rad*7, (2*PI));
+                    pole_flags |= 1<<pole_now;
+                    LTX_LOG_INFO("Zero align[%d]: %f\n", pole_now, zero_align_list[pole_now]);
+
+                    // 如果已经对所有极对校准过了，那么结束较准
+                    if(pole_flags == 0x7F){
+                        align_rad_min = zero_align_list[0];
+                        align_rad_max = zero_align_list[0];
+                        // 计算平均值，并且如果范围变化较大，那么报错
+                        align_rad_average = 0;
+                        for(uint8_t i = 0; i < 7; i ++){
+                            align_rad_average += zero_align_list[i];
+                            align_rad_min = zero_align_list[i] < align_rad_min ? zero_align_list[i] : align_rad_min;
+                            align_rad_max = zero_align_list[i] > align_rad_max ? zero_align_list[i] : align_rad_max;
+                        }
+                        align_rad_average /= 7.0f;
+                        LTX_LOG_INFO("Zero align average: %f\n", align_rad_average);
+                        LTX_LOG_INFO("Range: %f\n", align_rad_max - align_rad_min);
+                        if((align_rad_max - align_rad_min) > 0.07f){
+                            LTX_LOG_WARN("Range of align error maybe too large!\n");
+                        }
+                        LTX_LOG_INFO("Align zero rad over.\n");
+                        LTX_LOG_INFO("Cut off motor...\n");
+                        // 应用到磁编码器偏置
+                        mt6701_set_rad_offset(&mag_encoder_wheel, align_rad_average/7.0f);
+                        // 准备逐渐减弱输出，结束脚本
+                        ltx_Script_next_step_delay(script, 11, 0);
+
+                        return ;
+                    }
+                    // 旋转到下一个极对对其进行较准
+                    ltx_Script_next_step_delay(script, 10, 0);
+                    return ;
+                }
+            }
+            // 电机还没稳定或者还没取够 20 个算平均值，继续
+            ltx_Script_next_step_delay(script, 4, 10);
+
+            break;
+
+        case 5: // 旋转极对，旋转 PI/2 弧度
+            ltx_foc1_svpwm_vec0(0.2, PI/2, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
+
+            ltx_Script_next_step_delay(script, 6, 200);
+
+            break;
+
+        case 6: // 旋转极对，旋转 PI 弧度
+            ltx_foc1_svpwm_vec0(0.2, PI, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
+
+            ltx_Script_next_step_delay(script, 7, 200);
+
+            break;
+
+        case 7: // 旋转极对，旋转 PI/2*3 弧度
+            ltx_foc1_svpwm_vec0(0.2, PI/2*3, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
+
+            ltx_Script_next_step_delay(script, 8, 200);
+
+            break;
+
+        case 8: // 旋转极对，旋转 2PI 弧度
+            ltx_foc1_svpwm_vec0(0.2, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
+
+            // 进入新极对较准
+            ltx_Script_next_step_delay(script, 9, 200);
+
+            break;
+
+        case 9: // 加强输出力
+            ltx_foc1_svpwm_vec0(0.35, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
+
+            // 进入新极对较准
+            ltx_Script_next_step_delay(script, 4, 600);
+
+            break;
+
+        case 10: // 减弱输出力
+            ltx_foc1_svpwm_vec0(0.2, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
+
+            // 进入极对切换
+            ltx_Script_next_step_delay(script, 5, 200);
+
+            break;
+
+        case 11: // 脚本结束，逐渐减弱驱动力
+            ltx_foc1_svpwm_vec0(0.2, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
+
+            // 进入极对切换
+            ltx_Script_next_step_delay(script, 12, 200);
+
+            break;
+
+        case 12: // 脚本结束，逐渐减弱驱动力
+            ltx_foc1_svpwm_vec0(0.1, 0, _test_output_abc); // 输出特定电压向量，让电机定在某个角度
+            ltx_bldc_set_duty_u(motor_foc, _test_output_abc[0]);
+            ltx_bldc_set_duty_v(motor_foc, _test_output_abc[1]);
+            ltx_bldc_set_duty_w(motor_foc, _test_output_abc[2]);
+
+            // 进入极对切换
+            ltx_Script_next_step_delay(script, 13, 200);
+
+            break;
+
+        case 13: // 脚本结束，关闭输出
+            ltx_bldc_set_duty_u(motor_foc, 0);
+            ltx_bldc_set_duty_v(motor_foc, 0);
+            ltx_bldc_set_duty_w(motor_foc, 0);
+
+            // 结束脚本
+            ltx_Script_next_step_over(script);
+            LTX_LOG_INFO("Init motor zero align success.\n");
+            motor_foc.flag_is_inited = 1;
+
+            break;
+
+    }
+    #else
+        motor_foc.flag_is_inited = 1;
+    #endif
+}
+
+
 
 
 // 所有外部硬件初始化完成或者初始化超时回调
@@ -156,10 +449,11 @@ void eventg_cb_device_init_over(struct ltx_Event_group_stu *eventg){
     ltx_App_destroy(&app_device_init);
 
     // 启动业务 app
-    ltx_App_init(&app_led);
-    ltx_App_resume(&app_led);
+    // ltx_App_init(&app_led);
+    // ltx_App_resume(&app_led);
 
     ltx_App_init(&app_motor);
+    // ltx_App_resume(&app_motor);
 }
 
 

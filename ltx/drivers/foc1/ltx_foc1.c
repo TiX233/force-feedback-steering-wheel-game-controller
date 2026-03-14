@@ -21,7 +21,7 @@ uint8_t six_vector_list[6][3] = {
 };
 
 // 可以自行设置两个零向量中 U1 的占比(0~1)：
-float u1_u0 = 0.5f; // 默认设置为对半开
+static float u1_u0 = 0.5f; // 默认设置为对半开
 /**
  * @brief 零矢量比例可变的 svpwm 算法，设置为 0.5 时表示 U1 和 U0 对半开，此时谐波最小
  * @param V_amplitude: 电压向量幅值百分比，[0~1]
@@ -46,25 +46,6 @@ void ltx_foc1_svpwm_vec10(float V_amplitude, float V_rad, float V_outputABC[]){
     theta = fmodf(V_rad, ANGLE60_TO_RAD);
 
     // 计算扇区
-    /*
-    if(angle_now < 180.0f){ // [0.0f, 180.0f)
-        if(angle_now < 60.0f){
-            sector = 0;
-        }else if(angle_now < 120.0f){
-            sector = 1;
-        }else {
-            sector = 2;
-        }
-    }else { // [180.0f, 360.0f)
-        if(angle_now < 240.0f){
-            sector = 3;
-        }else if(angle_now < 300.0f){
-            sector = 4;
-        }else {
-            sector = 5;
-        }
-    }
-    */
     sector = (uint8_t)(V_rad / ANGLE60_TO_RAD); // 不用条件判断，直接抹小数
     sector_next = (sector + 1)%6;
 
@@ -129,47 +110,3 @@ void ltx_foc1_svpwm_vec0(float V_amplitude, float V_rad, float V_outputABC[]){
     V_outputABC[1] = k1 * six_vector_list[sector][1] + k2 * six_vector_list[sector_next][1];
     V_outputABC[2] = k1 * six_vector_list[sector][2] + k2 * six_vector_list[sector_next][2];
 }
-
-/**
- * @brief 拟合版本的 零矢量全使用 U0 的 svpwm 算法，只需要算一次三角函数，但是轨迹圆会有微小凹陷，比较近似于圆
- *        计算出错意外得出的算法
- * @param V_amplitude: 电压向量幅值百分比，[0~1]
- * @param V_rad:       电压向量弧度，逆时针，[0, 2pi)，电角度
- * @param V_outputABC: 输出三相电压占空比
- */
-void ltx_foc1_svpwm_vec0_close(float V_amplitude, float V_rad, float V_outputABC[]){
-    
-    // 扇区
-    uint8_t sector;
-    uint8_t sector_next;
-    // 扇区内的角度
-    float theta; // θ = V_rad % 60度
-    float k1, k2; // 左右向量系数
-    float sin_theta;
-    // 左右向量以外的零向量可分配的时间
-
-    // θ = V_rad % 60度
-    theta = fmodf(V_rad, ANGLE60_TO_RAD);
-
-    // 计算扇区
-    sector = (uint8_t)(V_rad / ANGLE60_TO_RAD); // 不用条件判断，直接抹小数
-    sector_next = (sector + 1)%6;
-
-    // 向量合成
-    // 计算左右两个基向量的时间占比    
-    // 只需要算一次三角函数
-    sin_theta = sinf(theta + ANGLE60_TO_RAD);
-
-    k1 = sin_theta * (1- theta/ANGLE60_TO_RAD);
-    k2 = sin_theta * (theta/ANGLE60_TO_RAD);
-
-    // 加权平均
-    V_outputABC[0] = k1 * six_vector_list[sector][0] + k2 * six_vector_list[sector_next][0];
-    V_outputABC[1] = k1 * six_vector_list[sector][1] + k2 * six_vector_list[sector_next][1];
-    V_outputABC[2] = k1 * six_vector_list[sector][2] + k2 * six_vector_list[sector_next][2];
-}
-
-
-
-
-

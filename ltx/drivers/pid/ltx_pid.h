@@ -1,7 +1,7 @@
 /**
  * @file ltx_pid.h
  * @author realTiX
- * @brief pid 库，目前仅有 pi 控制器。包含一个通用 pi 控制器与一个角度专用 pi 控制器
+ * @brief pid 库，目前仅有 pi 控制器。包含一个位置式 pi 控制器与一个角度专用增量式 pi 控制器
  * @version 0.1
  * @date 2026-03-10 (0.1，初步完成功能设计)
  * 
@@ -18,7 +18,7 @@
     #define PI  3.14159265358979f
 #endif
 
-// 通用 pi 控制器对象结构体
+// 位置式 pi 控制器对象结构体
 struct ltx_pid_pi_stu {
     float kp;           // 比例
     float ki;           // 积分
@@ -28,24 +28,21 @@ struct ltx_pid_pi_stu {
     float limit_d;      // 输出下限
 };
 
-// 修改 pi 控制器参数
-void ltx_pid_pi_set_param(struct ltx_pid_pi_stu *pi_stu, float kp, float ki);
-
-// 更新 pi 控制器 api
+// 更新位置式 pi 控制器 api
 ltx_inline float ltx_pid_pi_update(struct ltx_pid_pi_stu *pi_stu, float error, float dt){
     pi_stu->integral += error * dt;
     // 抗积分饱和
     if(pi_stu->integral > pi_stu->limit_u) pi_stu->integral = pi_stu->limit_u;
-    if(pi_stu->integral < -pi_stu->limit_d) pi_stu->integral = -pi_stu->limit_d;
+    if(pi_stu->integral < pi_stu->limit_d) pi_stu->integral = pi_stu->limit_d;
     
     float output = pi_stu->kp * error + pi_stu->ki * pi_stu->integral;
     // 输出限幅
     if(output > pi_stu->limit_u) output = pi_stu->limit_u;
-    if(output < -pi_stu->limit_d) output = -pi_stu->limit_d;
+    if(output < pi_stu->limit_d) output = pi_stu->limit_d;
     return output;
 }
 
-// 角度 pi 控制器对象结构体，因为角度是循环的，所以不好用通用的 pi 控制器
+// 角度 pi 控制器对象结构体，就是带取模的增量式 pi 控制器
 struct ltx_pid_pi_angle_stu {
     float kp;           // 比例
     float ki;           // 积分
@@ -53,9 +50,6 @@ struct ltx_pid_pi_angle_stu {
     float error_prev;   // 上一次误差（归一化到 [-π, π]）
     float theta;        // 当前输出电压角度（归一化到 [0, 2π)）
 };
-
-// 修改角度 pi 控制器参数
-void ltx_pid_pi_angle_set_param(struct ltx_pid_pi_angle_stu *pi, float kp, float ki);
 
 /**
  * @brief               角度 pi 更新函数

@@ -4,10 +4,11 @@
 #include "ltx_app.h"
 
 #include "ltx_foc1.h"
+#include "ltx_foc2.h"
 #include "ltx_bldc.h"
 
 // 电机 foc 对象
-extern struct ltx_foc1_stu motor_foc;
+extern struct ltx_foc2_stu motor_foc;
 
 // adc 较准偏移值
 extern int16_t adc1_offset[3];
@@ -45,6 +46,11 @@ extern float mag_angle;
 // extern float mag_rad;
 // 磁编码器读取完成事件话题
 extern struct ltx_Topic_stu topic_mag_read_over;
+
+// 速度环脚本
+extern struct ltx_Script_stu script_speed;
+// 速度环 pi 控制器
+extern struct ltx_pid_pi_stu pi_speed;
 
 // 电流 adc 原始数据
 extern uint32_t adc1_buffer[3];
