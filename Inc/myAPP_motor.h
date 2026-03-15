@@ -11,7 +11,7 @@
 extern struct ltx_foc2_stu motor_foc;
 
 // adc 较准偏移值
-extern int16_t adc1_offset[3];
+extern float adc1_offset[3];
 
 // 配置设置电机 pwm 占空比内联回调
 ltx_bldc_config_duty_u_cb(motor_foc, {
@@ -29,13 +29,13 @@ ltx_bldc_config_trans_current_u_cb(motor_foc, {
     // i = adc*3.3伏/(50倍*0.02欧*2^12)
     // motor_foc.current_u = adc_val*(3.3f/50*0.02f*4095);
     // motor_foc.current_u = adc_val*(3.3f/4095);
-    motor_foc.i_A = (adc_val + adc1_offset[0] - 2048.0f)*0.0008056640625f;
+    motor_foc.i_A = (adc1_offset[0] - adc_val)*0.0008056640625f;
 })
 ltx_bldc_config_trans_current_v_cb(motor_foc, {
-    motor_foc.i_B = (adc_val + adc1_offset[1] - 2048.0f)*0.0008056640625f;
+    motor_foc.i_B = (adc1_offset[1] - adc_val)*0.0008056640625f;
 })
 ltx_bldc_config_trans_current_w_cb(motor_foc, {
-    motor_foc.i_C = (adc_val + adc1_offset[2] - 2048.0f)*0.0008056640625f;
+    motor_foc.i_C = (adc1_offset[2] - adc_val)*0.0008056640625f;
 })
 
 

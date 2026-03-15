@@ -154,12 +154,41 @@ void script_cb_led_init(struct ltx_Script_stu *script){
 
 }
 
-float zero_align_list[7];
-float adc1_offset_count[3];
+
+// 根据三相电流计算电流向量的弧度
+static float get_I_rad(float i_A, float i_B, float i_C){
+    // 计算电流向量模长
+    float vector_I_len = sqrtf(2.0f/3 * (i_A * i_A + i_B * i_B + i_C * i_C));
+    float vector_I_rad;
+
+    // 计算电流向量弧度
+    // 钳位避免超越定义域 [-1, 1]
+    float ratio = i_A / vector_I_len;
+    // 范围超出那就直接赋值，不用额外算反余弦
+    if(ratio < -1.0f){
+        vector_I_rad = PI;
+    }else if (ratio > 1.0f){
+        if(i_B < i_C){
+            vector_I_rad = 2*PI;
+        }else {
+            vector_I_rad = 0.0f;
+        }
+    }else {
+        vector_I_rad = acosf(ratio);
+        if(i_B < i_C) vector_I_rad = (2*PI) - vector_I_rad;
+    }
+
+    return vector_I_rad;
+}
+
+// 电机极对数
+#define MOTOR_POLE_PAIRS   7
+
+float zero_align_list[MOTOR_POLE_PAIRS];
 
 // 计算每个极对平均偏差对齐电角度与机械角度的脚本回调
 void script_cb_zero_align(struct ltx_Script_stu *script){
-    #if 0
+    #if 1
     static uint8_t mag_encoder_error_count = 0;
     static uint8_t motor_stable_count = 0; // 机械角度稳定计数
     static uint8_t elec_stable_count = 0; // 电角度稳定计数
@@ -167,8 +196,6 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
     static float average_elec_rad = 0;
     uint8_t pole_now = 0; // 当前极对
     static uint8_t pole_flags = 0; // 已较准的极对
-    static uint8_t mag_rad_in7 = 0; // 机械角度转换到电角度正在七个极对中的哪个
-    static float mag_rad_times7mod2pi = 0; // 机械角度转换到电角度
 
     float _test_output_abc[3];
     float align_rad_min;
@@ -213,21 +240,24 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
                 return ;
             }
             LTX_LOG_INFO("Waitting for motor stable...\n");
+            adc1_offset[0] = 0;
+            adc1_offset[1] = 0;
+            adc1_offset[2] = 0;
             ltx_Script_next_step_delay(script, 2, 500);
 
             break;
 
         case 2: // 等待电机稳定
             if(motor_stable_count >= 100){ // 电机已经保持了 100ms 没有动作
-                adc1_offset[0] = (int16_t)(adc1_offset_count[0] / 100.0f);
-                adc1_offset[1] = (int16_t)(adc1_offset_count[1] / 100.0f);
-                adc1_offset[2] = (int16_t)(adc1_offset_count[2] / 100.0f);
-                LTX_LOG_INFO("ADC1 offset: %d, %d, %d\n", adc1_offset[0], adc1_offset[1], adc1_offset[2]);
-                if((abs(adc1_offset[0]) > 100) || (abs(adc1_offset[1]) > 100) || (abs(adc1_offset[2]) > 100)){ // 电机 ADC 较准偏移值过大
+                adc1_offset[0] /= 100.0f;
+                adc1_offset[1] /= 100.0f;
+                adc1_offset[2] /= 100.0f;
+                LTX_LOG_INFO("ADC1 offset: %f, %f, %f\n", adc1_offset[0], adc1_offset[1], adc1_offset[2]);
+                if((fabsf(adc1_offset[0] - 2048.0f) > 100) || (fabsf(adc1_offset[1] - 2048.0f) > 100) || (fabsf(adc1_offset[2] - 2048.0f) > 100)){ // 电机 ADC 较准偏移值过大
                     LTX_LOG_ERRO("Motor adc offset too large!\n");
-                    adc1_offset[0] = 0;
-                    adc1_offset[1] = 0;
-                    adc1_offset[2] = 0;
+                    adc1_offset[0] = 2048.0f;
+                    adc1_offset[1] = 2048.0f;
+                    adc1_offset[2] = 2048.0f;
                     // 结束此脚本
                     ltx_Script_next_step_over(script);
                     return ;
@@ -239,14 +269,14 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
             }
             if(((last_mag_rad - motor_foc.rotor_rad) > 0.001f) || ((last_mag_rad - motor_foc.rotor_rad) < -0.001f)){ // 电机有动作
                 motor_stable_count = 0;
-                adc1_offset_count[0] = 0;
-                adc1_offset_count[1] = 0;
-                adc1_offset_count[2] = 0;
+                adc1_offset[0] = 0;
+                adc1_offset[1] = 0;
+                adc1_offset[2] = 0;
             }else { // 电机未动
                 // 计算 adc 较准偏置，取 100 次平均值
-                adc1_offset_count[0] += 2048.0f - adc1_buffer[0];
-                adc1_offset_count[1] += 2048.0f - adc1_buffer[1];
-                adc1_offset_count[2] += 2048.0f - adc1_buffer[2];
+                adc1_offset[0] += adc1_buffer[0];
+                adc1_offset[1] += adc1_buffer[1];
+                adc1_offset[2] += adc1_buffer[2];
                 motor_stable_count ++;
             }
             last_mag_rad = motor_foc.rotor_rad;
@@ -279,16 +309,16 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
             last_mag_rad = motor_foc.rotor_rad;
 
             if(motor_stable_count > 10){ // 电机已经稳定
-                average_elec_rad += motor_foc.vector_I_rad; // 取 20 个电角度的平均值
+                average_elec_rad += get_I_rad(-motor_foc.i_A, -motor_foc.i_B, -motor_foc.i_C); // 取 20 个电角度的平均值
                 if(motor_stable_count > 30){ // 够 20 个了
                     average_elec_rad /= 20.0f;
                     // 计算是在哪个极对
                     // 应该加个超次数计数，不然如果磁编码器不在线的话就只会计算某个极对一直无法完成初始化
                     // 无所谓了，磁编码器要是不在线反正后续也用不了，电机一直转不结束让用户察觉也正好。
-                    pole_now = (uint8_t)(motor_foc.rotor_rad*7 / (2*PI));
-                    if(pole_now > 6) pole_now = 0;
+                    pole_now = (uint8_t)(motor_foc.rotor_rad*MOTOR_POLE_PAIRS / (2*PI));
+                    if(pole_now > (MOTOR_POLE_PAIRS-1)) pole_now = 0;
                     // 将其存入列表
-                    zero_align_list[pole_now] = average_elec_rad - fmodf(motor_foc.rotor_rad*7, (2*PI));
+                    zero_align_list[pole_now] = average_elec_rad - fmodf(motor_foc.rotor_rad*MOTOR_POLE_PAIRS, (2*PI));
                     pole_flags |= 1<<pole_now;
                     LTX_LOG_INFO("Zero align[%d]: %f\n", pole_now, zero_align_list[pole_now]);
 
@@ -298,12 +328,12 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
                         align_rad_max = zero_align_list[0];
                         // 计算平均值，并且如果范围变化较大，那么报错
                         align_rad_average = 0;
-                        for(uint8_t i = 0; i < 7; i ++){
+                        for(uint8_t i = 0; i < MOTOR_POLE_PAIRS; i ++){
                             align_rad_average += zero_align_list[i];
                             align_rad_min = zero_align_list[i] < align_rad_min ? zero_align_list[i] : align_rad_min;
                             align_rad_max = zero_align_list[i] > align_rad_max ? zero_align_list[i] : align_rad_max;
                         }
-                        align_rad_average /= 7.0f;
+                        align_rad_average /= MOTOR_POLE_PAIRS;
                         LTX_LOG_INFO("Zero align average: %f\n", align_rad_average);
                         LTX_LOG_INFO("Range: %f\n", align_rad_max - align_rad_min);
                         if((align_rad_max - align_rad_min) > 0.07f){
@@ -312,7 +342,7 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
                         LTX_LOG_INFO("Align zero rad over.\n");
                         LTX_LOG_INFO("Cut off motor...\n");
                         // 应用到磁编码器偏置
-                        mt6701_set_rad_offset(&mag_encoder_wheel, align_rad_average/7.0f);
+                        mt6701_set_rad_offset(&mag_encoder_wheel, align_rad_average/MOTOR_POLE_PAIRS);
                         // 准备逐渐减弱输出，结束脚本
                         ltx_Script_next_step_delay(script, 11, 0);
 
@@ -427,6 +457,7 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
 
     }
     #else
+        mt6701_set_rad_offset(&mag_encoder_wheel, -2.75f/MOTOR_POLE_PAIRS);
         motor_foc.flag_is_inited = 1;
     #endif
 }

@@ -54,10 +54,11 @@ struct ltx_foc2_stu {
 };
 
 // svpwm 生成算法，任选其一
-void ltx_foc2_svpwm_1(float V_alpha, float V_beta, float V_outputABC[]); // 未验证
-void ltx_foc2_svpwm_2(float V_alpha, float V_beta, float V_outputABC[]);
+void ltx_foc2_svpwm_1(float V_alpha, float V_beta, float V_outputABC[]); // 扇区判断版本，未验证
+void ltx_foc2_svpwm_2(float V_alpha, float V_beta, float V_outputABC[]); // 简化等效版本，可输出 100% 电压
+void ltx_foc2_svpwm_3(float V_alpha, float V_beta, float V_outputABC[]); // 简化等效版本，最高只输出 97% 母线电压，避免低侧电阻无法采样
 
-#define ltx_foc2_svpwm_algorithm    ltx_foc2_svpwm_2
+#define ltx_foc2_svpwm_algorithm    ltx_foc2_svpwm_3
 
 
 // foc 算法，按 dt 定期调用，一般在 adc 采样完成回调调用，adc 一般配置为 pwm 周期触发

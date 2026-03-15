@@ -86,20 +86,16 @@ struct ltx_foc2_stu motor_foc = {
     .V_beta = 0.0f,
 
     .pi_q = {
-        .kp = 0.86f,
-        .ki = 0.5f,
+        .kp = 0.77f,
+        .ki = 1.0f,
         .integral = 0.0f,
-        // .limit_u = 3.0f,
-        // .limit_d = -3.0f,
         .limit_u = 0.5f,
         .limit_d = -0.5f,
     },
     .pi_d = {
-        .kp = 0.17f,
-        .ki = 0.15f,
+        .kp = 0.77f,
+        .ki = 0.95f,
         .integral = 0.0f,
-        // .limit_u = 3.0f,
-        // .limit_d = -3.0f,
         .limit_u = 0.5f,
         .limit_d = -0.5f,
     },
@@ -135,11 +131,11 @@ uint32_t adc1_buffer[3];
 struct ltx_Script_stu script_speed;
 // 速度环 pi 对象
 struct ltx_pid_pi_stu pi_speed = {
-    .kp = 0.1f,
-    .ki = 0.1f,
+    .kp = 0.002f,
+    .ki = 0.001f,
     .integral = 0,
-    .limit_u = 0.5f, // 电流模长上限
-    .limit_d = -0.5f, // 电流模长下限
+    .limit_u = 0.7f, // 电流上限
+    .limit_d = -0.7f, // 电流下限
 };
 
 
@@ -212,10 +208,8 @@ void script_cb_speed(struct ltx_Script_stu *script){
 
     ltx_Script_next_step_delay(script, 0, 1); // 1ms 后再次执行此脚本
 
-    // _LTX_IRQ_DISABLE();
-    speed_calculate = motor_foc.rotor_rad - last_mag_rad;
+    speed_calculate = last_mag_rad - motor_foc.rotor_rad;
     last_mag_rad = motor_foc.rotor_rad;
-    // _LTX_IRQ_ENABLE();
 
     if(speed_calculate > PI){
         speed_calculate -= 2*PI;
@@ -227,7 +221,7 @@ void script_cb_speed(struct ltx_Script_stu *script){
     // 一阶低通滤波
     rpm_filtered = rpm_filtered * (1 - rpm_lpf_coeff) + rpm_real * rpm_lpf_coeff;
 
-    // ltx_foc1_set_target_len(motor_foc, ltx_pid_pi_update(&pi_speed, rpm_target - rpm_filtered, 0.001f));
+    motor_foc.target_I_q = ltx_pid_pi_update(&pi_speed, rpm_target - rpm_filtered, 0.001f);
 }
 
 
@@ -315,13 +309,8 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c){
 }
 #endif
 
-// 直接在中断中展开，不调用回调
-#if 0
-void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc){
-    // ...
-}
-#endif
-int16_t adc1_offset[3];
+float adc1_offset[3] = {2048.0f, 2048.0f, 2048.0f};
+// 直接在中断中展开，不调用 HAL 库回调
 void ADC1_2_IRQHandler(void){
     // 检查是否为注入组转换结束中断（JEOC）
     if ((ADC1->SR & ADC_FLAG_JEOC) && (ADC1->CR1 & ADC_IT_JEOC)){
@@ -340,7 +329,7 @@ void ADC1_2_IRQHandler(void){
         ltx_bldc_trans_current_w(motor_foc, adc1_buffer[2]);
 
     GPIOA->BRR = (uint32_t)GPIO_PIN_15;
-        // 运行 foc1 算法，耗时 8.7us
+        // 运行 foc1 算法，耗时 8.7us，耗时过长，会导致开启打印数据关中断期间撞上下次 adc 中断，影响电流环响应，造成电机抖动
         // ltx_foc1_algorithm_1(&motor_foc);
 
         // 运行 foc2 算法，耗时 4.9us

@@ -614,11 +614,6 @@
               <FileType>1</FileType>
               <FilePath>..\ltx\drivers\foc2\ltx_foc2.c</FilePath>
             </File>
-            <File>
-              <FileName>ltx_pid.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\ltx\drivers\pid\ltx_pid.c</FilePath>
-            </File>
           </Files>
         </Group>
         <Group>

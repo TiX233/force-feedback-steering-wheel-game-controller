@@ -471,6 +471,10 @@ void print_cb_iabc(void *param){
     print_ic = motor_foc.i_C;
     LTX_LOG_FMT("i:%f,%f,%f\n", print_ia, print_ib, print_ic);
 }
+// 三相电压占空比
+void print_cb_vabc(void *param){
+    LTX_LOG_FMT("v:%f,%f,%f\n", motor_foc.v_outputABC[0], motor_foc.v_outputABC[1], motor_foc.v_outputABC[2]);
+}
 
 // qd 轴电流
 void print_cb_iQD(void *param){
@@ -515,6 +519,8 @@ struct {
     _P_DATA_INFO("iQD", &topic_adc1_update, print_cb_iQD),
     // 三相电流
     _P_DATA_INFO("iabc", &topic_adc1_update, print_cb_iabc),
+    // 三相电压占空比
+    _P_DATA_INFO("vabc", &topic_adc1_update, print_cb_vabc),
     // 电机转速
     _P_DATA_INFO("rpm", &(script_speed.alarm_next_run.topic), print_cb_rpm),
 

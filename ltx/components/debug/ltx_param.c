@@ -39,177 +39,67 @@ void param_write_heart_beat(struct param_stu *param, const char *new_val){
 }
 
 #if 0
+// 极坐标参数
 // foc 目标 电流模长
-void param_read_target_len(struct param_stu *param){
-    LTX_LOG_INFO("foc target I len: %f\n", motor_foc.target_I_len);
-}
-void param_write_target_len(struct param_stu *param, const char *new_val){
-    float new_len;
-
-    sscanf(new_val, "%f", &new_len);
-
-    if(new_len > 0.5f || new_len < -0.5f){
-        LTX_LOG_WARN("new len out of range: %f\n", new_len);
-        return ;
-    }
-    LTX_LOG_INFO("Set new len to %f\n", new_len);
-
-    ltx_foc1_set_target_len(motor_foc, new_len);
-}
-
+PARAM_READ(target_len, %f, motor_foc.target_I_len)
+PARAM_WRITE(target_len, float, %f, 0.5f, -0.5f, motor_foc.target_I_len = new_VAL;)
 // foc 目标 电流向量与转子方向夹角
-void param_read_target_rad(struct param_stu *param){
-    LTX_LOG_INFO("foc target I rad diff: %f\n", motor_foc.target_I_rad);
-}
-void param_write_target_rad(struct param_stu *param, const char *new_val){
-    float new_rad;
-
-    sscanf(new_val, "%f", &new_rad);
-
-    if(new_rad > 3.1415926f || new_rad < 0.0f){
-        LTX_LOG_WARN("new rad out of range: %f\n", new_rad);
-        return ;
-    }
-    LTX_LOG_INFO("Set new rad to %f\n", new_rad);
-
-    ltx_foc1_set_target_rad(motor_foc, new_rad);
-}
-
+PARAM_READ(target_rad, %f, motor_foc.target_I_rad)
+PARAM_WRITE(target_rad, float, %f, 3.14159f, 0, motor_foc.target_I_rad = new_VAL;)
 // foc 目标 电流模长 kp
-void param_read_len_kp(struct param_stu *param){
-    LTX_LOG_INFO("foc I len kp: %f\n", motor_foc.pi_amplitude.kp);
-}
-void param_write_len_kp(struct param_stu *param, const char *new_val){
-    float new_VAL;
-
-    sscanf(new_val, "%f", &new_VAL);
-
-    LTX_LOG_INFO("Set new len kp to %f\n", new_VAL);
-
-    motor_foc.pi_amplitude.kp = new_VAL;
-}
+PARAM_READ(len_kp, %f, motor_foc.pi_amplitude.kp)
+PARAM_WRITE(len_kp, float, %f, 100, 0, motor_foc.pi_amplitude.kp = new_VAL;)
 // foc 目标 电流模长 ki
-void param_read_len_ki(struct param_stu *param){
-    LTX_LOG_INFO("foc I len ki: %f\n", motor_foc.pi_amplitude.ki);
-}
-void param_write_len_ki(struct param_stu *param, const char *new_val){
-    float new_VAL;
-
-    sscanf(new_val, "%f", &new_VAL);
-
-    LTX_LOG_INFO("Set new len ki to %f\n", new_VAL);
-
-    motor_foc.pi_amplitude.ki = new_VAL;
-}
-
+PARAM_READ(len_ki, %f, motor_foc.pi_amplitude.ki)
+PARAM_WRITE(len_ki, float, %f, 100, 0, motor_foc.pi_amplitude.ki = new_VAL;)
 // foc 目标 电流夹角 kp
-void param_read_rad_kp(struct param_stu *param){
-    LTX_LOG_INFO("foc I rad kp: %f\n", motor_foc.pi_theta.kp);
-}
-void param_write_rad_kp(struct param_stu *param, const char *new_val){
-    float new_VAL;
-
-    sscanf(new_val, "%f", &new_VAL);
-
-    LTX_LOG_INFO("Set new rad kp to %f\n", new_VAL);
-
-    motor_foc.pi_theta.kp = new_VAL;
-}
+PARAM_READ(rad_kp, %f, motor_foc.pi_theta.kp)
+PARAM_WRITE(rad_kp, float, %f, 100, 0, motor_foc.pi_theta.kp = new_VAL;)
 // foc 目标 电流夹角 ki
-void param_read_rad_ki(struct param_stu *param){
-    LTX_LOG_INFO("foc I rad ki: %f\n", motor_foc.pi_theta.ki);
-}
-void param_write_rad_ki(struct param_stu *param, const char *new_val){
-    float new_VAL;
-
-    sscanf(new_val, "%f", &new_VAL);
-
-    LTX_LOG_INFO("Set new rad ki to %f\n", new_VAL);
-
-    motor_foc.pi_theta.ki = new_VAL;
-}
+PARAM_READ(rad_ki, %f, motor_foc.pi_theta.ki)
+PARAM_WRITE(rad_ki, float, %f, 100, 0, motor_foc.pi_theta.ki = new_VAL;)
 #endif
 
-// foc 目标 iq
+// foc2 目标 iq
 PARAM_READ(iq, %f, motor_foc.target_I_q)
-PARAM_WRITE(iq, float, %f, 0.5f, -0.5f, motor_foc.target_I_q = new_VAL;)
+PARAM_WRITE(iq, float, %f, 1, -1, motor_foc.target_I_q = new_VAL;)
 
-// foc 目标 id
+// foc2 目标 id
 PARAM_READ(id, %f, motor_foc.target_I_d)
-PARAM_WRITE(id, float, %f, 0.5f, -0.5f, motor_foc.target_I_d = new_VAL;)
+PARAM_WRITE(id, float, %f, 1, -1, motor_foc.target_I_d = new_VAL;)
 
-// foc q 轴 kp
+// foc2 q 轴 kp
 PARAM_READ(kp_q, %f, motor_foc.pi_q.kp)
 PARAM_WRITE(kp_q, float, %f, 100, 0.0f, motor_foc.pi_q.kp = new_VAL;)
 
-// foc q 轴 ki
+// foc2 q 轴 ki
 PARAM_READ(ki_q, %f, motor_foc.pi_q.ki)
 PARAM_WRITE(ki_q, float, %f, 100, 0.0f, motor_foc.pi_q.ki = new_VAL;)
 
-// foc d 轴 kp
+// foc2 d 轴 kp
 PARAM_READ(kp_d, %f, motor_foc.pi_d.kp)
 PARAM_WRITE(kp_d, float, %f, 100, 0.0f, motor_foc.pi_d.kp = new_VAL;)
 
-// foc d 轴 ki
+// foc2 d 轴 ki
 PARAM_READ(ki_d, %f, motor_foc.pi_d.ki)
 PARAM_WRITE(ki_d, float, %f, 100, 0.0f, motor_foc.pi_d.ki = new_VAL;)
 
-extern float rpm_target;
 // 速度环目标速度
-void param_read_rpm_target(struct param_stu *param){
-    LTX_LOG_INFO("rpm target: %f\n", rpm_target);
-}
-void param_write_rpm_target(struct param_stu *param, const char *new_val){
-    float new_VAL;
-
-    sscanf(new_val, "%f", &new_VAL);
-
-    LTX_LOG_INFO("Set new rpm target to %f\n", new_VAL);
-
-    rpm_target = new_VAL;
-}
+extern float rpm_target;
+PARAM_READ(rpm_target, %f, rpm_target)
+PARAM_WRITE(rpm_target, float, %f, 10000, -10000, rpm_target = new_VAL;)
 
 // 速度环 kp
-void param_read_speed_kp(struct param_stu *param){
-    LTX_LOG_INFO("speed kp: %f\n", pi_speed.kp);
-}
-void param_write_speed_kp(struct param_stu *param, const char *new_val){
-    float new_VAL;
-
-    sscanf(new_val, "%f", &new_VAL);
-
-    LTX_LOG_INFO("Set new speed kp to %f\n", new_VAL);
-
-    pi_speed.kp = new_VAL;
-}
+PARAM_READ(speed_kp, %f, pi_speed.kp)
+PARAM_WRITE(speed_kp, float, %f, 100, 0, pi_speed.kp = new_VAL;)
 // 速度环 ki
-void param_read_speed_ki(struct param_stu *param){
-    LTX_LOG_INFO("speed ki: %f\n", pi_speed.ki);
-}
-void param_write_speed_ki(struct param_stu *param, const char *new_val){
-    float new_VAL;
-
-    sscanf(new_val, "%f", &new_VAL);
-
-    LTX_LOG_INFO("Set new speed ki to %f\n", new_VAL);
-
-    pi_speed.ki = new_VAL;
-}
+PARAM_READ(speed_ki, %f, pi_speed.ki)
+PARAM_WRITE(speed_ki, float, %f, 100, 0, pi_speed.ki = new_VAL;)
 
 // 速度环低通滤波系数
 extern float rpm_lpf_coeff;
-void param_read_speed_lpf(struct param_stu *param){
-    LTX_LOG_INFO("speed rpm_lpf: %f\n", rpm_lpf_coeff);
-}
-void param_write_speed_lpf(struct param_stu *param, const char *new_val){
-    float new_VAL;
-
-    sscanf(new_val, "%f", &new_VAL);
-
-    LTX_LOG_INFO("Set new speed rpm_lpf to %f\n", new_VAL);
-
-    rpm_lpf_coeff = new_VAL;
-}
+PARAM_READ(speed_lpf, %f, rpm_lpf_coeff)
+PARAM_WRITE(speed_lpf, float, %f, 1, 0, rpm_lpf_coeff = new_VAL;)
 
 
 #define PARAM_ITEM(_name)   {.param_name = #_name,.param_read = param_read_##_name,.param_write = param_write_##_name,}
@@ -221,41 +111,19 @@ struct param_stu param_list[] = {
     },
 
 #if 0
-    { // 电流向量模长
-        .param_name = "target_len",
-        .param_read = param_read_target_len,
-        .param_write = param_write_target_len,
-    },
-
-    { // 电流向量与转子的夹角
-        .param_name = "target_rad",
-        .param_read = param_read_target_rad,
-        .param_write = param_write_target_rad,
-    },
-
-    { // 电流向量模长 kp
-        .param_name = "len_kp",
-        .param_read = param_read_len_kp,
-        .param_write = param_write_len_kp,
-    },
-
-    { // 电流向量模长 ki
-        .param_name = "len_ki",
-        .param_read = param_read_len_ki,
-        .param_write = param_write_len_ki,
-    },
-
-    { // 电流向量夹角 kp
-        .param_name = "rad_kp",
-        .param_read = param_read_rad_kp,
-        .param_write = param_write_rad_kp,
-    },
-
-    { // 电流向量夹角 ki
-        .param_name = "rad_ki",
-        .param_read = param_read_rad_ki,
-        .param_write = param_write_rad_ki,
-    },
+    // foc1 可读写参数
+    // 电流向量模长
+    PARAM_ITEM(target_len),
+    // 电流向量与转子的夹角
+    PARAM_ITEM(target_rad),
+    // 电流向量模长 kp
+    PARAM_ITEM(len_kp),
+    // 电流向量模长 ki
+    PARAM_ITEM(len_ki),
+    // 电流向量夹角 kp
+    PARAM_ITEM(rad_kp),
+    // 电流向量夹角 ki
+    PARAM_ITEM(rad_ki),
 #endif
 
     // foc2 可读写参数
