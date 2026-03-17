@@ -142,12 +142,16 @@ void ltx_foc2_svpwm_3(float V_alpha, float V_beta, float V_outputABC[]){
     float offset = 0.5f * (umin + umax);
     
     // 得到占空比（标幺化到0~1）
-    V_outputABC[0] = (u - offset + 0.5f) * 0.97f;
-    V_outputABC[1] = (v - offset + 0.5f) * 0.97f;
-    V_outputABC[2] = (w - offset + 0.5f) * 0.97f;
+    V_outputABC[0] = u - offset + 0.5f;
+    V_outputABC[1] = v - offset + 0.5f;
+    V_outputABC[2] = w - offset + 0.5f;
     
     // 限幅
     if(V_outputABC[0] < 0) V_outputABC[0] = 0; if(V_outputABC[0] > 1) V_outputABC[0] = 1;
     if(V_outputABC[1] < 0) V_outputABC[1] = 0; if(V_outputABC[1] > 1) V_outputABC[1] = 1;
     if(V_outputABC[2] < 0) V_outputABC[2] = 0; if(V_outputABC[2] > 1) V_outputABC[2] = 1;
+
+    V_outputABC[0] *= 0.97f;
+    V_outputABC[1] *= 0.97f;
+    V_outputABC[2] *= 0.97f;
 }

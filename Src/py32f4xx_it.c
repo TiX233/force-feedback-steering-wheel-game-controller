@@ -139,9 +139,11 @@ void PendSV_Handler(void)
     ltx_Sys_scheduler();
 }
 
+#if 0
 // i2c 看门狗计数器
 extern volatile uint8_t flag_i2c_wdg;
 uint8_t mag_reg_addr = 0x03;
+#endif
 /**
  * @brief  This function handles SysTick Handler.
  * @param  None
@@ -151,27 +153,12 @@ void SysTick_Handler(void)
 {
     HAL_IncTick();
 
-#if 1
+#if 0
     if(flag_i2c_wdg){ // i2c 看门狗开启
         if(flag_i2c_wdg == 1){ // i2c 未更新
             // 修复 i2c
             // 强制停止
             HAL_I2C_Master_Abort_IT(&hi2c1_handler, MT6701_DEFAULT_ADDR);
-            // 重新发起 i2c 读取
-            HAL_I2C_Master_Transmit_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, &mag_reg_addr, 1);
-        }
-        // 重置计数器
-        flag_i2c_wdg = 1;
-    }
-#elif 0
-    // 受不了了，画蛇添足的 i2c 多主机兼容 ip 设计你还我 cpu 性能来
-    if(flag_i2c_wdg){ // i2c 看门狗开启
-        if(flag_i2c_wdg == 1){ // i2c 未更新
-            // 修复 i2c
-            // 强制生成停止位
-            SET_BIT(I2C1->CR1, I2C_CR1_STOP);
-            __HAL_UNLOCK(&hi2c1_handler);
-            hi2c1_handler.State = HAL_I2C_STATE_READY;
             // 重新发起 i2c 读取
             HAL_I2C_Master_Transmit_DMA(&hi2c1_handler, MT6701_DEFAULT_ADDR, &mag_reg_addr, 1);
         }
@@ -202,27 +189,26 @@ void DMA1_Channel1_IRQHandler(void){
     HAL_DMA_IRQHandler(hspi2_handler.hdmatx);
 }
 
-// void ADC1_2_IRQHandler(void){
-//     HAL_ADC_IRQHandler(&hadc1_handler);
-// }
-#if 0
-// 注入触发用不了 dma
-void DMA1_Channel2_IRQHandler(void){
-    HAL_DMA_IRQHandler(hadc1_handler.DMA_Handle);
-}
-#endif
 
+#if 0
 void I2C1_EV_IRQHandler(void){
     HAL_I2C_EV_IRQHandler(&hi2c1_handler);
 }
 void I2C1_ER_IRQHandler(void){
     HAL_I2C_ER_IRQHandler(&hi2c1_handler);
 }
+#endif
+
+void USART2_IRQHandler(void){
+    HAL_UART_IRQHandler(&huart2_handler);
+}
 void DMA1_Channel3_IRQHandler(void){
-    HAL_DMA_IRQHandler(hi2c1_handler.hdmatx);
+    // HAL_DMA_IRQHandler(hi2c1_handler.hdmatx);
+    HAL_DMA_IRQHandler(huart2_handler.hdmatx);
 }
 void DMA1_Channel4_IRQHandler(void){
-    HAL_DMA_IRQHandler(hi2c1_handler.hdmarx);
+    // HAL_DMA_IRQHandler(hi2c1_handler.hdmarx);
+    HAL_DMA_IRQHandler(huart2_handler.hdmarx);
 }
 
 /************************ (C) COPYRIGHT Puya *****END OF FILE******************/

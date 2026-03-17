@@ -227,60 +227,45 @@ void script_cb_speed(struct ltx_Script_stu *script){
 
 // mt6701 用户平台自定义回调
 void wheel_mag_e_read_reg(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num){
-    HAL_I2C_Mem_Read(&hi2c1_handler, mt->addr, reg_addr, 1, reg_buffer, reg_num, 1000);
-}
-
-// 使用 hal 库内存读取函数，非常耗时，要占 63% 的 cpu 时间，估计写地址是阻塞的
-#if 0
-void wheel_mag_e_read_reg_dma(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num){
     
-    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
-    HAL_StatusTypeDef status = HAL_I2C_Mem_Read_DMA(&hi2c1_handler, mt->addr, reg_addr, 1, reg_buffer, reg_num);
-    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
-
-    // 发起 dma 读取失败
-    if(status != HAL_OK){
-        LTX_LOG_ERRO("mag dma read err: %d, %d\n", status, hi2c1_handler.ErrorCode);
-    }
-}
+#if 0
+    HAL_I2C_Mem_Read(&hi2c1_handler, mt->addr, reg_addr, 1, reg_buffer, reg_num, 1000);
 #else
+
+#endif
+}
+
+
+#if 0
+// I2C 方式读取磁编
 // 拆分成发收，虽然有两次中断，但是发地址不阻塞
 uint8_t reg_addr_for_tx = 0x03;
 uint8_t *reg_read_buf;
 volatile uint8_t flag_i2c_wdg = 0;
 void wheel_mag_e_read_reg_dma(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num){
     
-    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
     reg_addr_for_tx = reg_addr;
     reg_read_buf = reg_buffer;
 
     // 开启看门狗
     flag_i2c_wdg = 3;
-
     HAL_StatusTypeDef status = HAL_I2C_Master_Transmit_DMA(&hi2c1_handler, mt->addr, &reg_addr_for_tx, 1);
-
+    
     // 发起 dma 读取失败
     if(status != HAL_OK){
         LTX_LOG_ERRO("mag dma read err: %d, %d\n", status, hi2c1_handler.ErrorCode);
     }
-    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+}
+#else
+// spi 方式读取磁编
+void wheel_mag_e_read_reg_dma(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num){
+
 }
 #endif
 
-// 不使用 hal 库内存读取函数，因为写地址部分是阻塞的
+// 
 #if 0
-void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c){
-    // 转换角度
-    mag_angle = mt6701_trans_angle(&mag_encoder_wheel);
-    mag_rad = mt6701_trans_rad(&mag_encoder_wheel);
-    // 发起下次读取
-    mt6701_read_dma(&mag_encoder_wheel);
-    // 发布角度更新事件
-    ltx_Topic_publish(&topic_mag_read_over);
-    // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_15);
-}
-#else
-// 拆分成两次中断
+// 不使用 hal 库内存读取函数，因为写地址部分是阻塞的，拆分成两次中断
 void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c){
     // 看门狗标志位 ++
     flag_i2c_wdg ++;
@@ -309,6 +294,8 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c){
 }
 #endif
 
+// 磁编改用 spi
+
 float adc1_offset[3] = {2048.0f, 2048.0f, 2048.0f};
 // 直接在中断中展开，不调用 HAL 库回调
 void ADC1_2_IRQHandler(void){
@@ -320,13 +307,12 @@ void ADC1_2_IRQHandler(void){
 
         // 读取 adc 数值
         adc1_buffer[1] = ADC1->JDR1;
-        adc1_buffer[2] = ADC1->JDR2;
-        adc1_buffer[0] = ADC1->JDR3;
+        adc1_buffer[0] = ADC1->JDR2;
 
         // 换算 adc 值为电流
         ltx_bldc_trans_current_u(motor_foc, adc1_buffer[0]);
         ltx_bldc_trans_current_v(motor_foc, adc1_buffer[1]);
-        ltx_bldc_trans_current_w(motor_foc, adc1_buffer[2]);
+        ltx_bldc_trans_current_w(motor_foc, 0);
 
     GPIOA->BRR = (uint32_t)GPIO_PIN_15;
         // 运行 foc1 算法，耗时 8.7us，耗时过长，会导致开启打印数据关中断期间撞上下次 adc 中断，影响电流环响应，造成电机抖动

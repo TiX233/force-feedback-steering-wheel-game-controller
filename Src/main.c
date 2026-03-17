@@ -40,28 +40,37 @@
 
 /* Private define ------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
+// 打印串口
+UART_HandleTypeDef huart2_handler;
+DMA_HandleTypeDef hdma1ch3_handler;
+DMA_HandleTypeDef hdma1ch4_handler;
+
+// ws2812 彩灯
 SPI_HandleTypeDef hspi2_handler;
 DMA_HandleTypeDef hdma1ch1_handler;
 
+// 电机 adc
 ADC_HandleTypeDef hadc1_handler;
-// DMA_HandleTypeDef hdma1ch2_handler;
 
+// 电机 pwm
+TIM_HandleTypeDef htim1_handler;
+
+// 外设 adc
 ADC_HandleTypeDef hadc2_handler;
 DMA_HandleTypeDef hdma1ch2_handler;
 
-TIM_HandleTypeDef htim1_handler;
+// 磁编
+// I2C_HandleTypeDef hi2c1_handler;
 
-I2C_HandleTypeDef hi2c1_handler;
-DMA_HandleTypeDef hdma1ch3;
-DMA_HandleTypeDef hdma1ch4;
 
 /* Private user code ---------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private function prototypes -----------------------------------------------*/
 static void mcu_init_clock(void);
+static void mcu_init_uart2(void);
 static void mcu_init_usb(void);
 static void mcu_init_spi2(void);
-static void mcu_init_i2c1(void);
+// static void mcu_init_i2c1(void);
 static void mcu_init_tim1(void);
 static void mcu_init_adc1(void);
 static void mcu_init_adc2(void);
@@ -72,7 +81,6 @@ static void mcu_init_btn_pin(void);
  * @retval int
  */
 int main(void){
-
     /* Reset of all peripherals, Initializes the Systick */
     HAL_Init();
     
@@ -82,40 +90,33 @@ int main(void){
         HAL_NVIC_SetPriority(PendSV_IRQn, 3, 1);
     #else
         // 设置 systick 为最低优先级
-        HAL_NVIC_SetPriority(SysTick_IRQn, 3, 1);
+        // HAL_NVIC_SetPriority(SysTick_IRQn, 3, 1);
     #endif
-
-    ltx_Log_init();
-    LTX_LOG_STR("\n\nSYSTEM START\n\n");
 
     // 初始化外设
     mcu_init_clock();
+    mcu_init_uart2();
+    ltx_Log_init();
+    LTX_LOG_STR("\n\nSYSTEM START\n\n");
     mcu_init_btn_pin();
     mcu_init_adc1();
     // adc1 较准
-    if(HAL_ADCEx_Calibration_Start(&hadc1_handler) != HAL_OK){
-        while(1){
-            LTX_LOG_ERRO("ADC calibration Failed!\n");
-            HAL_Delay(1000);
-        }
-    }
+    if(HAL_ADCEx_Calibration_Start(&hadc1_handler) != HAL_OK)
+        while(1){ LTX_LOG_ERRO("ADC calibration Failed!\n"); HAL_Delay(1000); }
     // trgo 才能使用 dma，而且只有 ch1 才能触发，并且不能调整采样时间点且只有 ch1 输出非 0% 或 100% 才能触发采样
     // HAL_ADC_Start_DMA(&hadc1_handler, (uint32_t*)adc1_buffer, 3);
     // ch4 只能注入组中断触发采样，用不了 dma，无所谓了，dma 还要产生两次中断搞些判断，注入组直接后台采好一次中断就好了，比 dma 还 dma
-    if(HAL_ADCEx_InjectedStart_IT(&hadc1_handler) != HAL_OK){
+    if(HAL_ADCEx_InjectedStart_IT(&hadc1_handler) != HAL_OK)
         while(1){ LTX_LOG_ERRO("ADC1 injected start IT Failed!\n"); HAL_Delay(1000); }
-    }
+
     mcu_init_adc2();
     // adc 较准
-    if(HAL_ADCEx_Calibration_Start(&hadc2_handler) != HAL_OK){
-        while(1){
-            LTX_LOG_ERRO("ADC calibration Failed!\n");
-            HAL_Delay(1000);
-        }
-    }
+    if(HAL_ADCEx_Calibration_Start(&hadc2_handler) != HAL_OK)
+        while(1){ LTX_LOG_ERRO("ADC calibration Failed!\n"); HAL_Delay(1000); }
+
     mcu_init_tim1();
     mcu_init_spi2();
-    mcu_init_i2c1();
+    // mcu_init_i2c1();
     // mcu_init_usb();
 
     LTX_LOG_INFO("MCU init over at %dms\n", ltx_Sys_get_tick());
@@ -158,6 +159,19 @@ int main(void){
 }
 
 
+static void mcu_init_uart2(void){
+    
+    huart2_handler.Instance          = USART2;
+    // huart2_handler.Init.BaudRate     = 115200;
+    huart2_handler.Init.BaudRate     = 4000000;
+    huart2_handler.Init.WordLength   = UART_WORDLENGTH_8B;
+    huart2_handler.Init.StopBits     = UART_STOPBITS_1;
+    huart2_handler.Init.Parity       = UART_PARITY_NONE;
+    huart2_handler.Init.HwFlowCtl    = UART_HWCONTROL_NONE;
+    huart2_handler.Init.Mode         = UART_MODE_TX_RX;
+    HAL_UART_Init(&huart2_handler);
+}
+
 static void mcu_init_spi2(void){
     hspi2_handler.Instance                  = SPI2;
     hspi2_handler.Init.BaudRatePrescaler    = SPI_BAUDRATEPRESCALER_32; // 确保速度为 4Mbits/s
@@ -186,6 +200,7 @@ static void mcu_init_spi2(void){
     }
 }
 
+#if 0
 static void mcu_init_i2c1(void){
     hi2c1_handler.Instance             = I2C1;
     hi2c1_handler.Init.ClockSpeed      = 400000;
@@ -204,6 +219,7 @@ static void mcu_init_i2c1(void){
         }
     }
 }
+#endif
 
 static void mcu_init_tim1(void){
     TIM_OC_InitTypeDef tim_channel_config;
@@ -299,7 +315,7 @@ static void mcu_init_adc1(void){
     hadc1_handler.Init.DataAlign             = ADC_DATAALIGN_RIGHT;            /* Right-alignment for converted data */
     hadc1_handler.Init.ScanConvMode          = ADC_SCAN_ENABLE;                /* Scan Mode Enable */
     hadc1_handler.Init.ContinuousConvMode    = DISABLE;                        /* Single Conversion */
-    hadc1_handler.Init.NbrOfConversion       = 3;                              /* Conversion Number */
+    hadc1_handler.Init.NbrOfConversion       = 2;                              /* Conversion Number */
     hadc1_handler.Init.DiscontinuousConvMode = DISABLE;                        /* Discontinuous Mode Disable */
     hadc1_handler.Init.NbrOfDiscConversion   = 1;                              /* Discontinuous Conversion Number 1 */
     /* regular group not used for hardware trigger here */
@@ -312,6 +328,7 @@ static void mcu_init_adc1(void){
         }
     }
     
+    #if 0
     adc_channel_config.Channel      = ADC_CHANNEL_5;
     adc_channel_config.Rank         = ADC_REGULAR_RANK_1;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_3CYCLES_5; // 16Mhz，采样时间为 3.5+12.5=16周期，1us
@@ -322,17 +339,18 @@ static void mcu_init_adc1(void){
             HAL_Delay(1000);
         }
     }
+    #endif
 
-    /* 配置注入组：使用 TIM1 CC4 触发注入采样，3 个 injected rank 对应三相电流 */
+    // 配置注入组：使用 TIM1 CC4 触发注入采样
     {
         ADC_InjectionConfTypeDef injcfg = {0};
 
-        injcfg.InjectedChannel = ADC_CHANNEL_5;
+        injcfg.InjectedChannel = ADC_CHANNEL_6;
         injcfg.InjectedRank = ADC_INJECTED_RANK_1;
         injcfg.InjectedSamplingTime = ADC_SAMPLETIME_3CYCLES_5;
         injcfg.InjectedOffset = 0;
 
-        injcfg.InjectedNbrOfConversion = 3;
+        injcfg.InjectedNbrOfConversion = 2;
         injcfg.InjectedDiscontinuousConvMode = DISABLE;
         injcfg.AutoInjectedConv = DISABLE;
         injcfg.ExternalTrigInjecConv = ADC_EXTERNALTRIGINJECCONV_T1_CC4; /* TIM1 CC4 */
@@ -342,14 +360,8 @@ static void mcu_init_adc1(void){
             while(1){ LTX_LOG_ERRO("ADC1 injected cfg Failed!\n"); HAL_Delay(1000); }
         }
 
-        injcfg.InjectedChannel = ADC_CHANNEL_6;
-        injcfg.InjectedRank = ADC_INJECTED_RANK_2;
-        if (HAL_ADCEx_InjectedConfigChannel(&hadc1_handler, &injcfg) != HAL_OK){
-            while(1){ LTX_LOG_ERRO("ADC1 injected cfg Failed!\n"); HAL_Delay(1000); }
-        }
-
         injcfg.InjectedChannel = ADC_CHANNEL_7;
-        injcfg.InjectedRank = ADC_INJECTED_RANK_3;
+        injcfg.InjectedRank = ADC_INJECTED_RANK_2;
         if (HAL_ADCEx_InjectedConfigChannel(&hadc1_handler, &injcfg) != HAL_OK){
             while(1){ LTX_LOG_ERRO("ADC1 injected cfg Failed!\n"); HAL_Delay(1000); }
         }
@@ -394,7 +406,7 @@ static void mcu_init_adc2(void){
     hadc2_handler.Init.DataAlign             = ADC_DATAALIGN_RIGHT;            /* Right-alignment for converted data */
     hadc2_handler.Init.ScanConvMode          = ADC_SCAN_ENABLE;                /* Scan Mode Enable */
     hadc2_handler.Init.ContinuousConvMode    = DISABLE;                        /* Single Conversion */
-    hadc2_handler.Init.NbrOfConversion       = 7;                              /* Conversion Number */
+    hadc2_handler.Init.NbrOfConversion       = 5;                              /* Conversion Number */
     hadc2_handler.Init.DiscontinuousConvMode = DISABLE;                        /* Discontinuous Mode Disable */
     hadc2_handler.Init.NbrOfDiscConversion   = 1;                              /* Discontinuous Conversion Number 1 */
     hadc2_handler.Init.ExternalTrigConv      = ADC_SOFTWARE_START;             /* Software Trigger */
@@ -428,7 +440,7 @@ static void mcu_init_adc2(void){
         }
     }
     
-    adc_channel_config.Channel      = ADC_CHANNEL_2;
+    adc_channel_config.Channel      = ADC_CHANNEL_5;
     adc_channel_config.Rank         = ADC_REGULAR_RANK_3;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
@@ -439,7 +451,7 @@ static void mcu_init_adc2(void){
         }
     }
     
-    adc_channel_config.Channel      = ADC_CHANNEL_3;
+    adc_channel_config.Channel      = ADC_CHANNEL_8;
     adc_channel_config.Rank         = ADC_REGULAR_RANK_4;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
@@ -450,30 +462,8 @@ static void mcu_init_adc2(void){
         }
     }
     
-    adc_channel_config.Channel      = ADC_CHANNEL_4;
-    adc_channel_config.Rank         = ADC_REGULAR_RANK_5;
-    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
-    
-    if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
-        while(1){
-            LTX_LOG_ERRO("ADC2 ch %d init Failed!\n", adc_channel_config.Channel);
-            HAL_Delay(1000);
-        }
-    }
-    
-    adc_channel_config.Channel      = ADC_CHANNEL_8;
-    adc_channel_config.Rank         = ADC_REGULAR_RANK_6;
-    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
-    
-    if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
-        while(1){
-            LTX_LOG_ERRO("ADC2 ch %d init Failed!\n", adc_channel_config.Channel);
-            HAL_Delay(1000);
-        }
-    }
-    
     adc_channel_config.Channel      = ADC_CHANNEL_9;
-    adc_channel_config.Rank         = ADC_REGULAR_RANK_7;
+    adc_channel_config.Rank         = ADC_REGULAR_RANK_5;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
     if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
@@ -505,7 +495,7 @@ static void mcu_init_btn_pin(void){
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Pin = GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14;
+    GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     // GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -555,10 +545,7 @@ static void mcu_init_clock(void)
     OscInitstruct.PLL.PLLMUL = RCC_PLL_MUL8;         // 128Mhz
     /* Configure Oscillators */
     if (HAL_RCC_OscConfig(&OscInitstruct) != HAL_OK){
-        while(1){
-            LTX_LOG_ERRO("RCC init Failed!\n");
-            HAL_Delay(1000);
-        }
+        while(1);
     }
 
     ClkInitstruct.ClockType = RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
@@ -568,10 +555,7 @@ static void mcu_init_clock(void)
     ClkInitstruct.APB2CLKDivider = RCC_HCLK_DIV1;         /* APB2 clock not divided */
     /* Configure Clocks */
     if (HAL_RCC_ClockConfig(&ClkInitstruct, FLASH_LATENCY_5) != HAL_OK){ // 被坑了，芯片是便宜，但是 flash 要开到 5 等待，希望他的 art 最好能像手册里说的一样“相当于 0 等待”
-        while(1){
-            LTX_LOG_ERRO("CLK init Failed!\n");
-            HAL_Delay(1000);
-        }
+        while(1);
     }
 }
 

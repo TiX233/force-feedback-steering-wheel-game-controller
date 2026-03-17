@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,PY32F403xD</Define>
               <Undefine></Undefine>
-              <IncludePath>..\Inc;..\Drivers\CMSIS\Include;..\Drivers\CMSIS\Device\PUYA\PY32F4xx\Include;..\Drivers\PY32F4xx_HAL_Driver\Inc;..\Middlewares\Third_Party\CherryUSB\port;..\Middlewares\Third_Party\CherryUSB\core;..\Middlewares\Third_Party\CherryUSB\common;..\Middlewares\Third_Party\CherryUSB\class\cdc;..\Middlewares\Third_Party\CherryUSB\class\hid;..\ltx\inc;..\ltx\components\app;..\ltx\components\debug;..\ltx\components\event_group;..\ltx\components\lock;..\ltx\components\log;..\ltx\components\script;..\ltx\drivers\bldc;..\ltx\drivers\foc1;..\Devices;..\ltx\drivers\foc2;..\ltx\drivers\pid</IncludePath>
+              <IncludePath>..\Inc;..\Drivers\CMSIS\Include;..\Drivers\CMSIS\Device\PUYA\PY32F4xx\Include;..\Drivers\PY32F4xx_HAL_Driver\Inc;..\Middlewares\Third_Party\CherryUSB\port;..\Middlewares\Third_Party\CherryUSB\core;..\Middlewares\Third_Party\CherryUSB\common;..\Middlewares\Third_Party\CherryUSB\class\cdc;..\Middlewares\Third_Party\CherryUSB\class\hid;..\ltx\inc;..\ltx\components\app;..\ltx\components\debug;..\ltx\components\event_group;..\ltx\components\lock;..\ltx\components\log;..\ltx\components\script;..\ltx\drivers\bldc;..\ltx\drivers\foc1;..\Devices;..\ltx\drivers\foc2;..\ltx\drivers\pid;..\ltx\components\multi_buffer</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -529,6 +529,11 @@
               <FileType>1</FileType>
               <FilePath>..\Drivers\PY32F4xx_HAL_Driver\Src\py32f4xx_hal_tim_ex.c</FilePath>
             </File>
+            <File>
+              <FileName>py32f4xx_hal_uart.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\PY32F4xx_HAL_Driver\Src\py32f4xx_hal_uart.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -613,6 +618,11 @@
               <FileName>ltx_foc2.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\ltx\drivers\foc2\ltx_foc2.c</FilePath>
+            </File>
+            <File>
+              <FileName>ltx_mtbuf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ltx\components\multi_buffer\ltx_mtbuf.c</FilePath>
             </File>
           </Files>
         </Group>

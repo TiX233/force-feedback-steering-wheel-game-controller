@@ -48,9 +48,67 @@ void HAL_MspInit(void){
     __HAL_RCC_PWR_CLK_ENABLE();
 }
 
-/**
-  * @brief Initialize SPI related MSP
-  */
+
+void HAL_UART_MspInit(UART_HandleTypeDef *huart){
+    GPIO_InitTypeDef  GPIO_InitStruct;
+    /* Enable clock */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_USART2_CLK_ENABLE();
+    __HAL_RCC_SYSCFG_CLK_ENABLE();
+    __HAL_RCC_DMA1_CLK_ENABLE();
+    
+    GPIO_InitStruct.Pin       = GPIO_PIN_2;
+    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull      = GPIO_PULLUP;
+    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF2_USART2;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_3;
+    GPIO_InitStruct.Alternate = GPIO_AF2_USART2;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    /* USART2 DMA configuration */
+    /* USART2_TX initialization */
+    hdma1ch3_handler.Instance = DMA1_Channel3;
+    hdma1ch3_handler.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma1ch3_handler.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma1ch3_handler.Init.MemInc = DMA_MINC_ENABLE;
+    hdma1ch3_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma1ch3_handler.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma1ch3_handler.Init.Mode = DMA_NORMAL;
+    hdma1ch3_handler.Init.Priority = DMA_PRIORITY_LOW;
+    if(HAL_DMA_Init(&hdma1ch3_handler) != HAL_OK) while(1);
+    __HAL_LINKDMA(&huart2_handler, hdmatx, hdma1ch3_handler);
+
+    /* USART2_RX initialization */
+    hdma1ch4_handler.Instance = DMA1_Channel4;
+    hdma1ch4_handler.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma1ch4_handler.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma1ch4_handler.Init.MemInc = DMA_MINC_ENABLE;
+    hdma1ch4_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma1ch4_handler.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma1ch4_handler.Init.Mode = DMA_NORMAL;
+    hdma1ch4_handler.Init.Priority = DMA_PRIORITY_LOW;
+    if (HAL_DMA_Init(&hdma1ch4_handler) != HAL_OK) while(1);
+    __HAL_LINKDMA(&huart2_handler, hdmarx, hdma1ch4_handler);
+    
+    /* Set DMA request mapping */
+    HAL_DMA_ChannelMap(&hdma1ch3_handler, DMA_CHANNEL_MAP_USART2_WR);
+    HAL_DMA_ChannelMap(&hdma1ch4_handler, DMA_CHANNEL_MAP_USART2_RD);
+    
+    /* Enable NVIC */
+    HAL_NVIC_SetPriority(USART2_IRQn, 2, 1);
+    HAL_NVIC_EnableIRQ(USART2_IRQn);
+    
+    HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 2, 1);
+    HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+
+    HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 3, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
+}
+
+
 void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
 
     GPIO_InitTypeDef  GPIO_InitStruct;
@@ -69,7 +127,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
         GPIO_InitStruct.Alternate = GPIO_AF3_SPI2;
         HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
         /* Interrupt configuration */
-        HAL_NVIC_SetPriority(SPI2_IRQn, 2, 1);
+        HAL_NVIC_SetPriority(SPI2_IRQn, 3, 1);
         HAL_NVIC_EnableIRQ(SPI2_IRQn);
 
         /* DMA_CH1 configuration */
@@ -96,14 +154,11 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
         HAL_DMA_ChannelMap(&hdma1ch1_handler, DMA_CHANNEL_MAP_SPI2_WR); /* SPI2_TX DMA1_CH1 */
         
         /* DMA interrupt configuration*/
-        HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 2, 1);
+        HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 3, 1);
         HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
     }
 }
 
-/**
-  * @brief Deinit SPI MSP
-  */
 void HAL_SPI_MspDeInit(SPI_HandleTypeDef *hspi){
 
     if (hspi->Instance == SPI2){
@@ -125,9 +180,6 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef *hspi){
 }
 
 
-/**
-  * @brief Initialize ADC MSP.
-  */
 void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
 {
     GPIO_InitTypeDef GPIO_InitStruct={0};
@@ -140,7 +192,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
     // 电流采样
     if (hadc->Instance == ADC1){
     
-        GPIO_InitStruct.Pin = GPIO_PIN_5 | GPIO_PIN_6 |GPIO_PIN_7 ;
+        GPIO_InitStruct.Pin = GPIO_PIN_6 |GPIO_PIN_7 ;
         GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
         GPIO_InitStruct.Pull = GPIO_NOPULL;
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -152,7 +204,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
     // 摇杆等
     if (hadc->Instance == ADC2){
     
-        GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4;
+        GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_5;
         GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
         GPIO_InitStruct.Pull = GPIO_NOPULL;
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -184,9 +236,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
     }
 }
 
-/**
-  * @brief Initialize TIM1 related MSP
-  */
+
 void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef *htim)
 {
     GPIO_InitTypeDef   GPIO_InitStruct;
@@ -214,9 +264,7 @@ void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef *htim)
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 }
 
-/**
-  * @brief Initialize I2C MSP
-  */
+#if 0
 void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -291,5 +339,6 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
     HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 1);           /* Set interrupt priority */
     HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);                   /* Enable DMA channel 2 interrupt */
 }
+#endif
 
 /************************ (C) COPYRIGHT Puya *****END OF FILE******************/

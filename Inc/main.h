@@ -43,10 +43,11 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* Private defines -----------------------------------------------------------*/
 
-// 开启 ADC1 接收完成中断
-#define USE_ADC1_IRQ
-
 /* Exported variables prototypes ---------------------------------------------*/
+extern UART_HandleTypeDef huart2_handler;
+extern DMA_HandleTypeDef hdma1ch3_handler;
+extern DMA_HandleTypeDef hdma1ch4_handler;
+
 extern SPI_HandleTypeDef hspi2_handler;
 extern DMA_HandleTypeDef hdma1ch1_handler;
 
@@ -57,9 +58,9 @@ extern ADC_HandleTypeDef hadc2_handler;
 
 extern TIM_HandleTypeDef htim1_handler;
 
+#if 0
 extern I2C_HandleTypeDef hi2c1_handler;
-extern DMA_HandleTypeDef hdma1ch3;
-extern DMA_HandleTypeDef hdma1ch4;
+#endif
 
 /* Exported functions prototypes ---------------------------------------------*/
 

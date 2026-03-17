@@ -1457,6 +1457,10 @@ HAL_StatusTypeDef HAL_UART_Receive_DMA(UART_HandleTypeDef *huart, uint8_t *pData
     in the UART CR3 register */
     SET_BIT(huart->Instance->CR3, USART_CR3_DMAR);
 
+     /* Enable the UART Idle Line Detection Interrupt to allow detection of
+       end of frame when using DMA for variable length reception */
+     SET_BIT(huart->Instance->CR1, USART_CR1_IDLEIE);
+
     return HAL_OK;
   }
   else
@@ -2799,7 +2803,7 @@ static void UART_EndTxTransfer(UART_HandleTypeDef *huart)
 static void UART_EndRxTransfer(UART_HandleTypeDef *huart)
 {
   /* Disable RXNE, PE and ERR (Frame error, noise error, overrun error) interrupts */
-  CLEAR_BIT(huart->Instance->CR1, (USART_CR1_RXNEIE | USART_CR1_PEIE));
+  CLEAR_BIT(huart->Instance->CR1, (USART_CR1_RXNEIE | USART_CR1_PEIE | USART_CR1_IDLEIE));
   CLEAR_BIT(huart->Instance->CR3, USART_CR3_EIE);
 
   /* At end of Rx process, restore huart->RxState to Ready */

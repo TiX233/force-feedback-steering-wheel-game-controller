@@ -64,7 +64,7 @@
 /* #define HAL_I2S_MODULE_ENABLED */
 #define HAL_SPI_MODULE_ENABLED
 #define HAL_TIM_MODULE_ENABLED
-// #define HAL_UART_MODULE_ENABLED
+#define HAL_UART_MODULE_ENABLED
 /* #define HAL_USART_MODULE_ENABLED */
 /* #define HAL_USB_MODULE_ENABLED */
 /* #define HAL_IWDG_MODULE_ENABLED */
@@ -98,7 +98,7 @@
   *        (when HSE is used as system clock source, directly or through the PLL).  
   */
 #if !defined  (HSE_VALUE) 
-#define HSE_VALUE               24000000U     /*!< Value of the External oscillator in Hz */
+#define HSE_VALUE               16000000U     /*!< Value of the External oscillator in Hz */
 #endif /* HSE_VALUE */
 
 #define HSE_STARTUP_TIMEOUT     100U          /*!< Time out for HSE start up, in ms */
@@ -153,7 +153,7 @@
   * @brief This is the HAL system configuration section
   */     
 #define  VDD_VALUE                    3300U /*!< Value of VDD in mv */
-#define  TICK_INT_PRIORITY            0x07U /*!< tick interrupt priority */
+#define  TICK_INT_PRIORITY            3U /*!< tick interrupt priority */
 #define  USE_RTOS                     0U
 
 /* ########################## Assert Selection ############################## */
