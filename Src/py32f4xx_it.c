@@ -182,11 +182,18 @@ void USB_IRQHandler(void)
 }
 
 
+// void SPI2_IRQHandler(void){
+//     HAL_SPI_IRQHandler(&hspi2_handler);
+// }
+void DMA1_Channel2_IRQHandler(void){
+    HAL_DMA_IRQHandler(&hdma1ch2_handler);
+}
+
 void SPI1_IRQHandler(void){
-    HAL_SPI_IRQHandler(&hspi2_handler);
+    HAL_SPI_IRQHandler(&hspi1_handler);
 }
 void DMA1_Channel1_IRQHandler(void){
-    HAL_DMA_IRQHandler(hspi2_handler.hdmatx);
+    HAL_DMA_IRQHandler(&hdma1ch1_handler);
 }
 
 

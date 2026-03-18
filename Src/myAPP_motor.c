@@ -144,6 +144,9 @@ struct ltx_Topic_stu topic_mag_read_over = _LTX_TOPIC_DEAFULT_CONFIG(topic_mag_r
 // 电流 adc 更新事件话题
 struct ltx_Topic_stu topic_adc1_update = _LTX_TOPIC_DEAFULT_CONFIG(topic_adc1_update);
 
+// void subscriber_cb_mag_read(void *param);
+// struct ltx_Topic_subscriber_stu subscriber_mag_read_after_adc1 = _LTX_SUBSCRIBER_DEAFULT_CONFIG(subscriber_cb_mag_read);
+
 int myApp_motor_init(struct ltx_App_stu *app){
     
     // 电机脚本
@@ -151,6 +154,7 @@ int myApp_motor_init(struct ltx_App_stu *app){
 
     // 发起 dma 读取磁编码器数据
     // mt6701_read_dma(&mag_encoder_wheel);
+    // ltx_Topic_subscribe(&topic_adc1_update, &subscriber_mag_read_after_adc1);
 
     return 0;
 }
@@ -231,7 +235,11 @@ void wheel_mag_e_read_reg(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_
 #if 0
     HAL_I2C_Mem_Read(&hi2c1_handler, mt->addr, reg_addr, 1, reg_buffer, reg_num, 1000);
 #else
-
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+    if(HAL_SPI_Receive(&hspi1_handler, reg_buffer, 1, 1000) != HAL_OK){
+        LTX_LOG_WARN("SPI1 ERR: %d\n", hspi1_handler.ErrorCode);
+    }
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
 #endif
 }
 
@@ -260,10 +268,21 @@ void wheel_mag_e_read_reg_dma(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *
 // spi 方式读取磁编
 void wheel_mag_e_read_reg_dma(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num){
 
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+#if 0
+    if(HAL_SPI_Receive_DMA(&hspi1_handler, reg_buffer, 3) != HAL_OK){
+        LTX_LOG_WARN("SPI1 ERR: %d, %d\n", hspi1_handler.ErrorCode, hspi1_handler.hdmarx->ErrorCode);
+    }
+    // 关闭串口 DMA 接收传输过半中断
+    __HAL_DMA_DISABLE_IT(&hdma1ch1_handler, DMA_IT_HT);
+#endif
+    if(HAL_SPI_Receive_IT(&hspi1_handler, mag_encoder_wheel.data_buffer, 1) != HAL_OK){
+        LTX_LOG_WARN("SPI1 ERR: %d\n", hspi1_handler.ErrorCode);
+    }
 }
 #endif
 
-// 
 #if 0
 // 不使用 hal 库内存读取函数，因为写地址部分是阻塞的，拆分成两次中断
 void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c){
@@ -294,11 +313,77 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c){
 }
 #endif
 
+
+#if 0
+void subscriber_cb_mag_read(void *param){
+    // static uint8_t busy_count = 0;
+    static uint8_t flag_busy = 0;
+    #if 0
+    if(!HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5)){
+        if(busy_count ++ > 10){
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+            LTX_LOG_DEBG("SPI BUSY\n");
+            busy_count = 0;
+            if (HAL_OK != HAL_DMA_Abort(hspi1_handler.hdmarx)){
+                SET_BIT(hspi1_handler.ErrorCode, HAL_SPI_ERROR_DMA);
+                LTX_LOG_DEBG("DMA E\n");
+                ltx_Topic_unsubscribe(&topic_adc1_update, &subscriber_mag_read_after_adc1);
+                return ;
+            }
+
+            /* Disable the SPI DMA Tx & Rx requests */
+            CLEAR_BIT(SPI1->CR2, SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN);
+            hspi1_handler.State = HAL_SPI_STATE_READY;
+        }
+        return ;
+    }
+    #else
+    if(!HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5)){
+        if(!flag_busy){
+            HAL_DMA_Abort(&hdma1ch1_handler);
+            CLEAR_BIT(SPI1->CR2, SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN);
+            HAL_SPI_Abort_IT(&hspi1_handler);
+            flag_busy = 1;
+        }
+        // if(busy_count ++ > 10){
+        //     LTX_LOG_DEBG("SPI BUSY\n");
+        //     ltx_Topic_unsubscribe(&topic_adc1_update, &subscriber_mag_read_after_adc1);
+        //     busy_count = 0;
+        // }
+        return ;
+    }
+    flag_busy = 0;
+    #endif
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+    if(HAL_SPI_Receive_DMA(&hspi1_handler, mag_encoder_wheel.data_buffer, 3) != HAL_OK){
+        LTX_LOG_WARN("SPI1 ERR: %d, %d\n", hspi1_handler.ErrorCode, hspi1_handler.hdmarx->ErrorCode);
+    }
+    // 关闭串口 DMA 接收传输过半中断
+    __HAL_DMA_DISABLE_IT(&hdma1ch1_handler, DMA_IT_HT);
+}
+#endif
+
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi){
+    HAL_SPI_Abort_IT(&hspi1_handler);
+}
+
+void HAL_SPI_AbortCpltCallback(SPI_HandleTypeDef *hspi){
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+}
+
 // 磁编改用 spi
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi){
+    // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+    GPIOB->BSRR = (uint32_t)GPIO_PIN_5;
+    motor_foc.rotor_rad = mt6701_trans_rad(&mag_encoder_wheel);
+    // 发布角度更新事件
+    ltx_Topic_publish(&topic_mag_read_over);
+}
 
 float adc1_offset[3] = {2048.0f, 2048.0f, 2048.0f};
 // 直接在中断中展开，不调用 HAL 库回调
 void ADC1_2_IRQHandler(void){
+    static uint8_t count_spi_busy = 0;
     // 检查是否为注入组转换结束中断（JEOC）
     if ((ADC1->SR & ADC_FLAG_JEOC) && (ADC1->CR1 & ADC_IT_JEOC)){
 
@@ -306,13 +391,13 @@ void ADC1_2_IRQHandler(void){
         // 读 adc 并转换三相电流耗时 0.74us，怎么硬件浮点数还这么慢，离谱
 
         // 读取 adc 数值
-        adc1_buffer[1] = ADC1->JDR1;
+        adc1_buffer[2] = ADC1->JDR1;
         adc1_buffer[0] = ADC1->JDR2;
 
         // 换算 adc 值为电流
         ltx_bldc_trans_current_u(motor_foc, adc1_buffer[0]);
-        ltx_bldc_trans_current_v(motor_foc, adc1_buffer[1]);
-        ltx_bldc_trans_current_w(motor_foc, 0);
+        ltx_bldc_trans_current_w(motor_foc, adc1_buffer[2]);
+        ltx_bldc_trans_current_v(motor_foc, 0);
 
     GPIOA->BRR = (uint32_t)GPIO_PIN_15;
         // 运行 foc1 算法，耗时 8.7us，耗时过长，会导致开启打印数据关中断期间撞上下次 adc 中断，影响电流环响应，造成电机抖动
@@ -342,5 +427,23 @@ void ADC1_2_IRQHandler(void){
         ADC1->CR1 |= ADC_IT_JEOC;
         // 软件触发注入组转换（需同时置位 JSWSTART 和 JEXTTRIG）
         ADC1->CR2 |= (ADC_CR2_JSWSTART | ADC_CR2_JEXTTRIG);
+
+        // mt6701_read_dma(&mag_encoder_wheel); // 发起 dma 读取磁编
+        // if(!HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5)){
+        if(!(GPIOB->IDR & (uint32_t)GPIO_PIN_5)){
+            if(count_spi_busy ++ > 5){
+                HAL_SPI_Abort_IT(&hspi1_handler);
+                count_spi_busy = 0;
+                HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+            }
+            return ;
+        }
+
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+        GPIOB->BRR = (uint32_t)GPIO_PIN_5;
+        if(HAL_SPI_Receive_IT(&hspi1_handler, mag_encoder_wheel.data_buffer, 1) != HAL_OK){
+            HAL_SPI_Abort_IT(&hspi1_handler);
+            LTX_LOG_WARN("SPI1 ERR: %d\n", hspi1_handler.ErrorCode);
+        }
     }
 }

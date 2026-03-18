@@ -112,27 +112,38 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart){
 void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
 
     GPIO_InitTypeDef  GPIO_InitStruct;
-    /* Initialize SPI2 */
-    if (hspi->Instance == SPI2){
+    if(hspi->Instance == SPI1){
 
         __HAL_RCC_GPIOB_CLK_ENABLE();                   /* Enable GPIOB clock */
         __HAL_RCC_SYSCFG_CLK_ENABLE();                  /* Enable SYSCFG clock */
-        __HAL_RCC_SPI2_CLK_ENABLE();                    /* Enable SPI2 clock */
-        __HAL_RCC_DMA1_CLK_ENABLE();                    /* Enable DMA clock */
-
-        /* GPIO configured as SPI：MOSI*/
-        GPIO_InitStruct.Pin       = GPIO_PIN_15;
+        __HAL_RCC_SPI1_CLK_ENABLE();                    /* Enable SPI1 clock */
+        // __HAL_RCC_DMA1_CLK_ENABLE();                    /* Enable DMA clock */
+    
+        // SCK
+        GPIO_InitStruct.Pin       = GPIO_PIN_3;
+        if(hspi->Init.CLKPolarity == SPI_POLARITY_LOW){
+            GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+        }else {
+            GPIO_InitStruct.Pull = GPIO_PULLUP;
+        }
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
         GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
-        GPIO_InitStruct.Alternate = GPIO_AF3_SPI2;
+        GPIO_InitStruct.Alternate = GPIO_AF3_SPI1;
+        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+        // MISO
+        GPIO_InitStruct.Pin       = GPIO_PIN_4;
+        GPIO_InitStruct.Pull      = GPIO_NOPULL;
         HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
         /* Interrupt configuration */
-        HAL_NVIC_SetPriority(SPI2_IRQn, 3, 1);
-        HAL_NVIC_EnableIRQ(SPI2_IRQn);
+        HAL_NVIC_SetPriority(SPI1_IRQn, 1, 1);
+        HAL_NVIC_EnableIRQ(SPI1_IRQn);
 
+    #if 0
+        // 不使用 dma，16bit 模式一次传输即可
         /* DMA_CH1 configuration */
         hdma1ch1_handler.Instance                 = DMA1_Channel1;
-        hdma1ch1_handler.Init.Direction           = DMA_MEMORY_TO_PERIPH;
+        hdma1ch1_handler.Init.Direction           = DMA_PERIPH_TO_MEMORY;
         hdma1ch1_handler.Init.PeriphInc           = DMA_PINC_DISABLE;
         hdma1ch1_handler.Init.MemInc              = DMA_MINC_ENABLE;
         if (hspi->Init.DataSize <= SPI_DATASIZE_8BIT){
@@ -148,18 +159,78 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
         /* Initialize DMA */
         HAL_DMA_Init(&hdma1ch1_handler);
         /* DMA handle is associated with SPI handle */
-        __HAL_LINKDMA(hspi, hdmatx, hdma1ch1_handler);
+        __HAL_LINKDMA(hspi, hdmarx, hdma1ch1_handler);
         
         /* Set DMA channel map. */
-        HAL_DMA_ChannelMap(&hdma1ch1_handler, DMA_CHANNEL_MAP_SPI2_WR); /* SPI2_TX DMA1_CH1 */
+        HAL_DMA_ChannelMap(&hdma1ch1_handler, DMA_CHANNEL_MAP_SPI1_RD);
         
         /* DMA interrupt configuration*/
-        HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 3, 1);
+        HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 1, 0);
         HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+    #endif
+    }
+    if (hspi->Instance == SPI2){
+
+        __HAL_RCC_GPIOB_CLK_ENABLE();                   /* Enable GPIOB clock */
+        __HAL_RCC_SYSCFG_CLK_ENABLE();                  /* Enable SYSCFG clock */
+        __HAL_RCC_SPI2_CLK_ENABLE();                    /* Enable SPI2 clock */
+        __HAL_RCC_DMA1_CLK_ENABLE();                    /* Enable DMA clock */
+
+        /* GPIO configured as SPI：MOSI*/
+        GPIO_InitStruct.Pin       = GPIO_PIN_15;
+        GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+        GPIO_InitStruct.Pull      = GPIO_PULLDOWN;
+        GPIO_InitStruct.Alternate = GPIO_AF3_SPI2;
+        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+        /* Interrupt configuration */
+        // HAL_NVIC_SetPriority(SPI2_IRQn, 3, 0);
+        // HAL_NVIC_EnableIRQ(SPI2_IRQn);
+
+        hdma1ch2_handler.Instance                 = DMA1_Channel2;
+        hdma1ch2_handler.Init.Direction           = DMA_MEMORY_TO_PERIPH;
+        hdma1ch2_handler.Init.PeriphInc           = DMA_PINC_DISABLE;
+        hdma1ch2_handler.Init.MemInc              = DMA_MINC_ENABLE;
+        if (hspi->Init.DataSize <= SPI_DATASIZE_8BIT){
+            hdma1ch2_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+            hdma1ch2_handler.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
+        }else {
+            hdma1ch2_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
+            hdma1ch2_handler.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;
+        }
+
+        hdma1ch2_handler.Init.Mode                = DMA_NORMAL;
+        hdma1ch2_handler.Init.Priority            = DMA_PRIORITY_MEDIUM;
+        /* Initialize DMA */
+        HAL_DMA_Init(&hdma1ch2_handler);
+        /* DMA handle is associated with SPI handle */
+        __HAL_LINKDMA(hspi, hdmatx, hdma1ch2_handler);
+        
+        /* Set DMA channel map. */
+        HAL_DMA_ChannelMap(&hdma1ch2_handler, DMA_CHANNEL_MAP_SPI2_WR); /* SPI2_TX DMA1_CH1 */
+        
+        /* DMA interrupt configuration*/
+        HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 3, 1);
+        HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
     }
 }
 
 void HAL_SPI_MspDeInit(SPI_HandleTypeDef *hspi){
+
+    if (hspi->Instance == SPI1){
+
+        /* Reset SPI peripheral */
+        __HAL_RCC_SPI1_FORCE_RESET();
+        __HAL_RCC_SPI1_RELEASE_RESET();
+
+        HAL_GPIO_DeInit(GPIOB, GPIO_PIN_3 | GPIO_PIN_4);
+
+        HAL_NVIC_DisableIRQ(SPI1_IRQn);
+#if 0
+        HAL_DMA_DeInit(&hdma1ch1_handler);
+        HAL_NVIC_DisableIRQ(DMA1_Channel1_IRQn);
+#endif
+    }
 
     if (hspi->Instance == SPI2){
 
@@ -168,13 +239,12 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef *hspi){
         __HAL_RCC_SPI2_RELEASE_RESET();
 
         /* Disable SPI and GPIO clock */
-        /* Deinit SPI SCK */
         HAL_GPIO_DeInit(GPIOB, GPIO_PIN_15);
 
         HAL_NVIC_DisableIRQ(SPI2_IRQn);
 
-        HAL_DMA_DeInit(&hdma1ch1_handler);
-        HAL_NVIC_DisableIRQ(DMA1_Channel1_IRQn);
+        HAL_DMA_DeInit(&hdma1ch2_handler);
+        HAL_NVIC_DisableIRQ(DMA1_Channel2_IRQn);
 
     }
 }

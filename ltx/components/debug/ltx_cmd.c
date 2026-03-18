@@ -430,6 +430,11 @@ void print_cb_mag_angle(void *param){
 void print_cb_mag_rad(void *param){
     LTX_LOG_FMT("mr:%f\n", motor_foc.rotor_rad);
 }
+// 磁编码器的原始值
+void print_cb_mag_origin(void *param){
+    LTX_LOG_FMT("mo:%02x %02x\n", mag_encoder_wheel.data_buffer[0], mag_encoder_wheel.data_buffer[1]);
+}
+
 // 三相电流原始值更新打印回调
 // uint32_t _test_cnt = 0;
 void print_cb_adc1(void *param){
@@ -503,6 +508,8 @@ struct {
     // _P_DATA_INFO("mag_angle", &topic_mag_read_over, print_cb_mag_angle),
     // 磁编码器的弧度
     _P_DATA_INFO("mag_rad", &topic_mag_read_over, print_cb_mag_rad),
+    // 磁编码器的原始值
+    _P_DATA_INFO("mag_origin", &topic_mag_read_over, print_cb_mag_origin),
     // 三相电流原始值
     _P_DATA_INFO("adc1", &topic_adc1_update, print_cb_adc1),
 #if 0
@@ -832,7 +839,7 @@ void cmd_cb_mag(uint8_t argc, char *argv[]){
     mt6701_read(&mag_encoder_wheel);
     float angle = mt6701_trans_angle(&mag_encoder_wheel);
     float rad = mt6701_trans_rad(&mag_encoder_wheel);
-    LTX_LOG_DEBG("Mag origin: %d, %d\n", mag_encoder_wheel.data_buffer[0], mag_encoder_wheel.data_buffer[1]);
+    LTX_LOG_DEBG("Mag origin: 0x%02x, 0x%02x, 0x%02x\n", mag_encoder_wheel.data_buffer[0], mag_encoder_wheel.data_buffer[1], mag_encoder_wheel.data_buffer[2]);
 
     LTX_LOG_INFO("Mag angle: %f\n", angle);
     LTX_LOG_INFO("Mag rad: %f\n", rad);

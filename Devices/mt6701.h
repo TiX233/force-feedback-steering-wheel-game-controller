@@ -2,9 +2,10 @@
  * @file mt6701.h
  * @author realTiX
  * @brief 用于 mt6701 磁编码器
- * @version 0.2
+ * @version 0.3
  * @date 2026-02-25 (0.1, 初步完成)
  *       2026-03-08 (0.2, 增加弧度偏置功能)
+ *       2026-03-18 (0.3, 适配 16bit spi 模式)
  * 
  * @copyright Copyright (c) 2026
  * 
@@ -14,13 +15,15 @@
 
 #include "main.h"
 
+#define MT6701_USESPI_16BIT
+
 // 默认设备地址
 #define MT6701_DEFAULT_ADDR     (0x06 << 1)
 
 struct mt6701_stu {
     uint8_t addr;
     float rad_offset; // 对弧度设置偏置
-    uint8_t data_buffer[2];
+    uint8_t data_buffer[3];
 
     // void (*write_reg)(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num);
     void (*read_reg)(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num);

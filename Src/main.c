@@ -47,7 +47,7 @@ DMA_HandleTypeDef hdma1ch4_handler;
 
 // ws2812 彩灯
 SPI_HandleTypeDef hspi2_handler;
-DMA_HandleTypeDef hdma1ch1_handler;
+DMA_HandleTypeDef hdma1ch2_handler;
 
 // 电机 adc
 ADC_HandleTypeDef hadc1_handler;
@@ -57,10 +57,11 @@ TIM_HandleTypeDef htim1_handler;
 
 // 外设 adc
 ADC_HandleTypeDef hadc2_handler;
-DMA_HandleTypeDef hdma1ch2_handler;
 
 // 磁编
 // I2C_HandleTypeDef hi2c1_handler;
+SPI_HandleTypeDef hspi1_handler;
+DMA_HandleTypeDef hdma1ch1_handler;
 
 
 /* Private user code ---------------------------------------------------------*/
@@ -71,6 +72,7 @@ static void mcu_init_uart2(void);
 static void mcu_init_usb(void);
 static void mcu_init_spi2(void);
 // static void mcu_init_i2c1(void);
+static void mcu_init_spi1(void);
 static void mcu_init_tim1(void);
 static void mcu_init_adc1(void);
 static void mcu_init_adc2(void);
@@ -90,7 +92,7 @@ int main(void){
         HAL_NVIC_SetPriority(PendSV_IRQn, 3, 1);
     #else
         // 设置 systick 为最低优先级
-        // HAL_NVIC_SetPriority(SysTick_IRQn, 3, 1);
+        HAL_NVIC_SetPriority(SysTick_IRQn, 3, 1);
     #endif
 
     // 初始化外设
@@ -103,11 +105,6 @@ int main(void){
     // adc1 较准
     if(HAL_ADCEx_Calibration_Start(&hadc1_handler) != HAL_OK)
         while(1){ LTX_LOG_ERRO("ADC calibration Failed!\n"); HAL_Delay(1000); }
-    // trgo 才能使用 dma，而且只有 ch1 才能触发，并且不能调整采样时间点且只有 ch1 输出非 0% 或 100% 才能触发采样
-    // HAL_ADC_Start_DMA(&hadc1_handler, (uint32_t*)adc1_buffer, 3);
-    // ch4 只能注入组中断触发采样，用不了 dma，无所谓了，dma 还要产生两次中断搞些判断，注入组直接后台采好一次中断就好了，比 dma 还 dma
-    if(HAL_ADCEx_InjectedStart_IT(&hadc1_handler) != HAL_OK)
-        while(1){ LTX_LOG_ERRO("ADC1 injected start IT Failed!\n"); HAL_Delay(1000); }
 
     mcu_init_adc2();
     // adc 较准
@@ -117,6 +114,7 @@ int main(void){
     mcu_init_tim1();
     mcu_init_spi2();
     // mcu_init_i2c1();
+    mcu_init_spi1();
     // mcu_init_usb();
 
     LTX_LOG_INFO("MCU init over at %dms\n", ltx_Sys_get_tick());
@@ -195,6 +193,45 @@ static void mcu_init_spi2(void){
     if (HAL_SPI_Init(&hspi2_handler) != HAL_OK){
         while(1){
             LTX_LOG_ERRO("SPI2 init Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+}
+
+static void mcu_init_spi1(void){
+    GPIO_InitTypeDef GPIO_InitStruct;
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Pin = GPIO_PIN_5;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+
+    hspi1_handler.Instance                  = SPI1;
+    hspi1_handler.Init.BaudRatePrescaler    = SPI_BAUDRATEPRESCALER_16; // 8M，不能超过 15M
+    hspi1_handler.Init.Direction            = SPI_DIRECTION_2LINES_RXONLY;
+    // hspi1_handler.Init.Direction            = SPI_DIRECTION_1LINE;
+    hspi1_handler.Init.CLKPolarity          = SPI_POLARITY_LOW;
+    hspi1_handler.Init.CLKPhase             = SPI_PHASE_2EDGE;
+    hspi1_handler.Init.DataSize             = SPI_DATASIZE_16BIT;
+    hspi1_handler.Init.FirstBit             = SPI_FIRSTBIT_MSB;
+    hspi1_handler.Init.NSS                  = SPI_NSS_SOFT;
+    hspi1_handler.Init.Mode                 = SPI_MODE_MASTER;
+    hspi1_handler.Init.CRCCalculation       = SPI_CRCCALCULATION_DISABLE;
+    /* hspi1_handler.Init.CRCPolynomial = 1; */
+    if (HAL_SPI_DeInit(&hspi1_handler) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("SPI1 Deinit Failed!\n");
+            HAL_Delay(1000);
+        }
+    }
+    
+    /* Initialize SPI peripheral */
+    if (HAL_SPI_Init(&hspi1_handler) != HAL_OK){
+        while(1){
+            LTX_LOG_ERRO("SPI1 init Failed!\n");
             HAL_Delay(1000);
         }
     }

@@ -62,6 +62,10 @@ int myAPP_device_init_init(struct ltx_App_stu *app){
                                                                                 \
                                                                                 , 10000); // 10s 超时时间
 
+    // 发起 adc1
+    if(HAL_ADCEx_InjectedStart_IT(&hadc1_handler) != HAL_OK)
+        while(1){ LTX_LOG_ERRO("ADC1 injected start IT Failed!\n"); HAL_Delay(1000); }
+
     return 0;
 }
 
@@ -242,7 +246,7 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
             LTX_LOG_INFO("Waitting for motor stable...\n");
             adc1_offset[0] = 0;
             adc1_offset[1] = 0;
-            adc1_offset[2] = 0;
+            // adc1_offset[2] = 0;
             ltx_Script_next_step_delay(script, 2, 500);
 
             break;
@@ -253,7 +257,8 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
                 adc1_offset[1] /= 100.0f;
                 adc1_offset[2] /= 100.0f;
                 LTX_LOG_INFO("ADC1 offset: %f, %f, %f\n", adc1_offset[0], adc1_offset[1], adc1_offset[2]);
-                if((fabsf(adc1_offset[0] - 2048.0f) > 100) || (fabsf(adc1_offset[1] - 2048.0f) > 100) || (fabsf(adc1_offset[2] - 2048.0f) > 100)){ // 电机 ADC 较准偏移值过大
+                // if((fabsf(adc1_offset[0] - 2048.0f) > 100) || (fabsf(adc1_offset[1] - 2048.0f) > 100) || (fabsf(adc1_offset[2] - 2048.0f) > 100)){ // 电机 ADC 较准偏移值过大
+                if((fabsf(adc1_offset[0] - 2048.0f) > 100) || (fabsf(adc1_offset[2] - 2048.0f) > 100)){ // 电机 ADC 较准偏移值过大
                     LTX_LOG_ERRO("Motor adc offset too large!\n");
                     adc1_offset[0] = 2048.0f;
                     adc1_offset[1] = 2048.0f;

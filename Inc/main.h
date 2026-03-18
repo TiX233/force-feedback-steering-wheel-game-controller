@@ -49,10 +49,9 @@ extern DMA_HandleTypeDef hdma1ch3_handler;
 extern DMA_HandleTypeDef hdma1ch4_handler;
 
 extern SPI_HandleTypeDef hspi2_handler;
-extern DMA_HandleTypeDef hdma1ch1_handler;
+extern DMA_HandleTypeDef hdma1ch2_handler;
 
 extern ADC_HandleTypeDef hadc1_handler;
-extern DMA_HandleTypeDef hdma1ch2_handler;
 
 extern ADC_HandleTypeDef hadc2_handler;
 
@@ -61,6 +60,8 @@ extern TIM_HandleTypeDef htim1_handler;
 #if 0
 extern I2C_HandleTypeDef hi2c1_handler;
 #endif
+extern SPI_HandleTypeDef hspi1_handler;
+extern DMA_HandleTypeDef hdma1ch1_handler;
 
 /* Exported functions prototypes ---------------------------------------------*/
 

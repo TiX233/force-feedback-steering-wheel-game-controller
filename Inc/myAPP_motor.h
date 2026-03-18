@@ -32,11 +32,11 @@ ltx_bldc_config_trans_current_u_cb(motor_foc, {
     motor_foc.i_A = (adc1_offset[0] - adc_val)*0.0008056640625f;
 })
 ltx_bldc_config_trans_current_v_cb(motor_foc, {
-    motor_foc.i_B = (adc1_offset[1] - adc_val)*0.0008056640625f;
+    // motor_foc.i_B = (adc1_offset[1] - adc_val)*0.0008056640625f;
+    motor_foc.i_B = -motor_foc.i_C - motor_foc.i_A;
 })
 ltx_bldc_config_trans_current_w_cb(motor_foc, {
-    // motor_foc.i_C = (adc1_offset[2] - adc_val)*0.0008056640625f;
-    motor_foc.i_C = -motor_foc.i_A - motor_foc.i_B;
+    motor_foc.i_C = (adc1_offset[2] - adc_val)*0.0008056640625f;
 })
 
 
