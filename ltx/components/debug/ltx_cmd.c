@@ -35,7 +35,8 @@ void cmd_cb_led(uint8_t argc, char *argv[]);
 void cmd_cb_rotate(uint8_t argc, char *argv[]);
 void cmd_cb_set_mag_rad_offset(uint8_t argc, char *argv[]);
 void cmd_cb_zero_align(uint8_t argc, char *argv[]);
-void cmd_cb_ring_speed(uint8_t argc, char *argv[]);
+void cmd_cb_speed_loop(uint8_t argc, char *argv[]);
+void cmd_cb_note_freq(uint8_t argc, char *argv[]);
 
 ltx_Cmd_item cmd_list[] = {
     {
@@ -85,52 +86,49 @@ ltx_Cmd_item cmd_list[] = {
     },
 
 
-    {
-        .cmd_name = "pwm",
+    {.cmd_name = "pwm",
         .brief = "set 3 pwm duty",
         .cmd_cb = cmd_cb_pwm,
     },
 
-    {
-        .cmd_name = "svpwm",
+    {.cmd_name = "svpwm",
         .brief = "test svpwm output",
         .cmd_cb = cmd_cb_svpwm,
     },
 
-    {
-        .cmd_name = "mag",
+    {.cmd_name = "mag",
         .brief = "test mag encoder",
         .cmd_cb = cmd_cb_mag,
     },
 
-    {
-        .cmd_name = "led",
+    {.cmd_name = "led",
         .brief = "set led rgb",
         .cmd_cb = cmd_cb_led,
     },
 
-    {
-        .cmd_name = "rotate",
+    {.cmd_name = "rotate",
         .brief = "test svpwm algorithm",
         .cmd_cb = cmd_cb_rotate,
     },
 
-    {
-        .cmd_name = "set_mag_rad_offset",
+    {.cmd_name = "set_mag_rad_offset",
         .brief = "set_mag_rad_offset",
         .cmd_cb = cmd_cb_set_mag_rad_offset,
     },
 
-    {
-        .cmd_name = "zero_align",
+    {.cmd_name = "zero_align",
         .brief = "align mag and elec rad",
         .cmd_cb = cmd_cb_zero_align,
     },
 
-    {
-        .cmd_name = "ring_speed",
+    {.cmd_name = "speed_loop",
         .brief = "run speed pi",
-        .cmd_cb = cmd_cb_ring_speed,
+        .cmd_cb = cmd_cb_speed_loop,
+    },
+
+    {.cmd_name = "note_freq",
+        .brief = "test motor sound",
+        .cmd_cb = cmd_cb_note_freq,
     },
 
 
@@ -1043,13 +1041,13 @@ void cmd_cb_zero_align(uint8_t argc, char *argv[]){
 
 
 // 运行速度环脚本
-void cmd_cb_ring_speed(uint8_t argc, char *argv[]){
+void cmd_cb_speed_loop(uint8_t argc, char *argv[]){
     if(argv[0][0] != '#'){
         LTX_LOG_WARN("PERMISSION DENIED!\n");
         return ;
     }
     if(argc < 2){
-        goto Useage_ring_speed;
+        goto Useage_speed_loop;
     }
 
     switch(argv[1][0]){
@@ -1066,10 +1064,75 @@ void cmd_cb_ring_speed(uint8_t argc, char *argv[]){
             break;
         
         default:
-            goto Useage_ring_speed;
+            goto Useage_speed_loop;
     }
 
     return ;
-Useage_ring_speed:
+Useage_speed_loop:
     LTX_LOG_INFO("Useage: %s <0/1>\n", argv[0]);
+}
+
+
+uint32_t note_reload;
+float note_duty;
+
+void subscriber_cb_note(void *param);
+struct ltx_Topic_subscriber_stu subscriber_note = _LTX_SUBSCRIBER_DEAFULT_CONFIG(subscriber_cb_note);
+uint32_t note_tick_count;
+void subscriber_cb_note(void *param){
+    static uint8_t flag_ab = 0;
+
+    if(note_tick_count++ > 20000){ // 播放声音超过 1 秒，20k
+        ltx_bldc_set_duty_u(motor_foc, 0);
+        ltx_bldc_set_duty_v(motor_foc, 0);
+        ltx_bldc_set_duty_w(motor_foc, 0);
+        ltx_Topic_unsubscribe(&topic_adc1_update, &subscriber_note);
+        return ;
+    }
+
+    if(note_tick_count % note_reload == 0){
+        if(flag_ab){
+            ltx_bldc_set_duty_u(motor_foc, note_duty);
+            ltx_bldc_set_duty_v(motor_foc, 0);
+            flag_ab = 0;
+        }else {
+            ltx_bldc_set_duty_u(motor_foc, 0);
+            ltx_bldc_set_duty_v(motor_foc, note_duty);
+            flag_ab = 1;
+        }
+    }
+}
+
+
+// 测试电机发声命令
+void cmd_cb_note_freq(uint8_t argc, char *argv[]){
+
+    if(argv[0][0] != '#'){
+        LTX_LOG_WARN("PERMISSION DENIED!\n");
+        return ;
+    }
+    if(argc < 3){
+        goto Useage_note_freq;
+    }
+
+    uint32_t input_note_Hz;
+    float input_note_duty;
+    sscanf(argv[1], "%d", &input_note_Hz);
+    sscanf(argv[2], "%f", &input_note_duty);
+
+    if(input_note_Hz > 10000 || input_note_duty > 1 || input_note_duty < 0){
+        goto Useage_note_freq;
+    }
+
+    LTX_LOG_INFO("Note freq: %d, duty: %f\n", input_note_Hz, input_note_duty);
+    note_duty = input_note_duty;
+    note_reload = 10000 / input_note_Hz;
+    note_tick_count = 0;
+    motor_foc.flag_is_inited = 0;
+
+    ltx_Topic_subscribe(&topic_adc1_update, &subscriber_note);
+
+    return ;
+Useage_note_freq:
+    LTX_LOG_INFO("Useage: %s <Hz(1~10000)> <duty(0~1)>\n", argv[0]);
 }

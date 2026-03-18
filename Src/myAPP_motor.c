@@ -86,15 +86,15 @@ struct ltx_foc2_stu motor_foc = {
     .V_beta = 0.0f,
 
     .pi_q = {
-        .kp = 0.77f,
-        .ki = 1.0f,
+        .kp = 0.9f,
+        .ki = 1.3f,
         .integral = 0.0f,
         .limit_u = 0.5f,
         .limit_d = -0.5f,
     },
     .pi_d = {
-        .kp = 0.77f,
-        .ki = 0.95f,
+        .kp = 0.9f,
+        .ki = 1.3f,
         .integral = 0.0f,
         .limit_u = 0.5f,
         .limit_d = -0.5f,
@@ -131,8 +131,8 @@ uint32_t adc1_buffer[3];
 struct ltx_Script_stu script_speed;
 // 速度环 pi 对象
 struct ltx_pid_pi_stu pi_speed = {
-    .kp = 0.002f,
-    .ki = 0.001f,
+    .kp = 0.0034f,
+    .ki = 0.007f,
     .integral = 0,
     .limit_u = 0.7f, // 电流上限
     .limit_d = -0.7f, // 电流下限
@@ -203,7 +203,7 @@ float rpm_real; // 实际转速
 float last_mag_rad; // 上次的磁编码读数
 
 float rpm_filtered = 0.0f;
-float rpm_lpf_coeff = 0.1f; // 低通滤波系数
+float rpm_lpf_coeff = 1.0f; // 低通滤波系数，1 为不开
 
 // 速度环脚本回调
 void script_cb_speed(struct ltx_Script_stu *script){
