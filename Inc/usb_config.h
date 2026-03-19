@@ -95,5 +95,8 @@
 void cdc_acm_init(void);
 void cdc_acm_data_send_with_dtr_test(void);
 
+void hid_mouse_init(void);
+void hid_mouse_test(void);
+
 
 #endif

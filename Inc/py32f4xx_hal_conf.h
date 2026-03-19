@@ -153,7 +153,7 @@
   * @brief This is the HAL system configuration section
   */     
 #define  VDD_VALUE                    3300U /*!< Value of VDD in mv */
-#define  TICK_INT_PRIORITY            3U /*!< tick interrupt priority */
+#define  TICK_INT_PRIORITY            0x07U /*!< tick interrupt priority */
 #define  USE_RTOS                     0U
 
 /* ########################## Assert Selection ############################## */

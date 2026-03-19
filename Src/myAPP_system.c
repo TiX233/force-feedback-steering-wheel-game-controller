@@ -234,9 +234,9 @@ void HAL_UART_IdleFrameDetectCpltCallback(UART_HandleTypeDef *huart){
 
     struct ltx_mtbuf_stu *buf_next_recive = ltx_mtbuf_write_get(&_cmd_buf_manager);
     if(buf_next_recive != NULL){ // 能分配新的 buffer 给下次接收
+        ltx_mtbuf_write_over(&_cmd_buf_manager, _cmd_buffer_reciving); // 完成此次接收
         _cmd_buffer_reciving = buf_next_recive;
         _cmd_buffer_reciving->data_size = huart->RxXferSize - huart->RxXferCount;
-        ltx_mtbuf_write_over(&_cmd_buf_manager, buf_next_recive); // 完成此次接收
     }else { // 如果没有新的 buffer 能够分配给下次接收，那么此次接收的数据作废，用此次的 buf 准备接收新数据
         buf_next_recive = _cmd_buffer_reciving;
         // buf_next_recive->data_size = 0;

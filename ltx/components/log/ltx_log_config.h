@@ -24,7 +24,8 @@
     #define _LTX_LOG_DMA_BUSY_FLAG_SET()    do{_ltx_log_out_dma_busy_flag = 1;}while(0)
     #define _LTX_LOG_DMA_BUSY_FLAG_CLR()    do{_ltx_log_out_dma_busy_flag = 0;}while(0)
     // 最终具体的 buf 输出到 DMA 的途径
-    #define _LTX_LOG_OUT_DMA(_ptr, _size)   HAL_UART_Transmit_DMA(&huart2_handler, (uint8_t *)_ptr, _size)
+    #define _LTX_LOG_OUT_DMA(_ptr, _size)   do{HAL_UART_Transmit_DMA(&huart2_handler, (uint8_t *)_ptr, _size);\
+                                                __HAL_DMA_DISABLE_IT(&hdma1ch3_handler, DMA_IT_HT);}while(0)
 #endif
 
 

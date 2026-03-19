@@ -12,6 +12,9 @@
 #include "myAPP_device_init.h"
 #include "mt6701.h"
 #include "ws2812.h"
+#include "usb_config.h"
+#include "usbd_core.h"
+#include "usbd_hid.h"
 
 typedef struct {
     const char *cmd_name;
@@ -37,6 +40,7 @@ void cmd_cb_set_mag_rad_offset(uint8_t argc, char *argv[]);
 void cmd_cb_zero_align(uint8_t argc, char *argv[]);
 void cmd_cb_speed_loop(uint8_t argc, char *argv[]);
 void cmd_cb_note_freq(uint8_t argc, char *argv[]);
+void cmd_cb_hid_send(uint8_t argc, char *argv[]);
 
 ltx_Cmd_item cmd_list[] = {
     {
@@ -129,6 +133,11 @@ ltx_Cmd_item cmd_list[] = {
     {.cmd_name = "note_freq",
         .brief = "test motor sound",
         .cmd_cb = cmd_cb_note_freq,
+    },
+
+    {.cmd_name = "hid_send",
+        .brief = "hid_send",
+        .cmd_cb = cmd_cb_hid_send,
     },
 
 
@@ -1135,4 +1144,48 @@ void cmd_cb_note_freq(uint8_t argc, char *argv[]){
     return ;
 Useage_note_freq:
     LTX_LOG_INFO("Useage: %s <Hz(1~10000)> <duty(0~1)>\n", argv[0]);
+}
+
+struct _hid_mouse {
+    uint8_t buttons;
+    int8_t x;
+    int8_t y;
+    int8_t wheel;
+};
+
+/*!< mouse report */
+static struct _hid_mouse hid_mouse_data;
+extern volatile uint8_t hid_state;
+// hid 测试发送命令
+void cmd_cb_hid_send(uint8_t argc, char *argv[]){
+    if(argc < 3){
+        goto Useage_hid_send;
+    }
+    hid_mouse_data.x += 2;
+    hid_mouse_data.y = 0;
+
+    int32_t hid_x, hid_y;
+    sscanf(argv[1], "%d", &hid_x);
+    sscanf(argv[2], "%d", &hid_y);
+
+    if(hid_x > 127 || hid_x < -128 || hid_y > 127 || hid_y < -128){
+        LTX_LOG_WARN("xy not in range(-128~127)!\n");
+        return ;
+    }
+
+    hid_mouse_data.x = hid_x;
+    hid_mouse_data.y = hid_y;
+
+    int ret = usbd_ep_start_write(0x81, (uint8_t *)&hid_mouse_data, 4);
+    if (ret < 0) {
+        LTX_LOG_WARN("hid send xy Failed\n");
+        return;
+    }
+    hid_state = 1;
+
+    LTX_LOG_INFO("Set send hid: %d, %d\n", hid_mouse_data.x, hid_mouse_data.y);
+
+    return ;
+Useage_hid_send:
+    LTX_LOG_INFO("Useage: %s <x> <y>\n", argv[0]);
 }

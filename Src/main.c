@@ -88,11 +88,11 @@ int main(void){
     
     #ifdef ltx_cfg_USE_IDLE_TASK
         // 如果需要空闲任务能力，那么需要将软中断设置为最低优先级，并且确保 systick 中断优先级比它更高
-        HAL_NVIC_SetPriority(SysTick_IRQn, 2, 1);
-        HAL_NVIC_SetPriority(PendSV_IRQn, 3, 1);
+        HAL_NVIC_SetPriority(SysTick_IRQn, 6, 0);
+        HAL_NVIC_SetPriority(PendSV_IRQn, 7, 0);
     #else
         // 设置 systick 为最低优先级
-        HAL_NVIC_SetPriority(SysTick_IRQn, 3, 1);
+        // HAL_NVIC_SetPriority(SysTick_IRQn, 7, 0);
     #endif
 
     // 初始化外设
@@ -115,7 +115,7 @@ int main(void){
     mcu_init_spi2();
     // mcu_init_i2c1();
     mcu_init_spi1();
-    // mcu_init_usb();
+    mcu_init_usb();
 
     LTX_LOG_INFO("MCU init over at %dms\n", ltx_Sys_get_tick());
 
@@ -145,7 +145,7 @@ int main(void){
 
 
 
-    /* Infinite loop */
+#if 0
     while (1)
     {
         /* Delay for 1s */
@@ -154,6 +154,7 @@ int main(void){
         /* Call the test function to send data to the USB host */
         cdc_acm_data_send_with_dtr_test();
     }
+#endif
 }
 
 
@@ -552,9 +553,11 @@ static void mcu_init_usb(void)
     SET_BIT(RCC->CFGR1, RCC_CFGR1_USBSELHSI48_Msk);
     __HAL_RCC_USB_CLK_ENABLE();
 
-    cdc_acm_init();
+    // cdc_acm_init();
+    hid_mouse_init();
 
     /* Enable USB interrupt */
+    HAL_NVIC_SetPriority(USBD_IRQn, 3, 0U);
     NVIC_EnableIRQ(USBD_IRQn);
 }
 

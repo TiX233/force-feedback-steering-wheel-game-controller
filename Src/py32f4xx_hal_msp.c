@@ -98,13 +98,13 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart){
     HAL_DMA_ChannelMap(&hdma1ch4_handler, DMA_CHANNEL_MAP_USART2_RD);
     
     /* Enable NVIC */
-    HAL_NVIC_SetPriority(USART2_IRQn, 2, 1);
+    HAL_NVIC_SetPriority(USART2_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(USART2_IRQn);
     
-    HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 2, 1);
+    HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
 
-    HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 3, 0);
+    HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
 }
 
@@ -136,7 +136,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
         GPIO_InitStruct.Pull      = GPIO_NOPULL;
         HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
         /* Interrupt configuration */
-        HAL_NVIC_SetPriority(SPI1_IRQn, 1, 1);
+        HAL_NVIC_SetPriority(SPI1_IRQn, 4, 0);
         HAL_NVIC_EnableIRQ(SPI1_IRQn);
 
     #if 0
@@ -210,7 +210,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
         HAL_DMA_ChannelMap(&hdma1ch2_handler, DMA_CHANNEL_MAP_SPI2_WR); /* SPI2_TX DMA1_CH1 */
         
         /* DMA interrupt configuration*/
-        HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 3, 1);
+        HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 6, 0);
         HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
     }
 }
