@@ -387,8 +387,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\Src\usbd_hid_mouse_if.c</PathWithFileName>
-      <FilenameWithoutPath>usbd_hid_mouse_if.c</FilenameWithoutPath>
+      <PathWithFileName>..\Src\usbd_hid_handle_if.c</PathWithFileName>
+      <FilenameWithoutPath>usbd_hid_handle_if.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

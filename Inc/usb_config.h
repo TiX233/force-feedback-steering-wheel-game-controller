@@ -92,11 +92,36 @@
 
 #define USBD_IRQHandler USBD_IRQHandler
 
-void cdc_acm_init(void);
-void cdc_acm_data_send_with_dtr_test(void);
+// 数据结构定义
+struct hid_handle_up {
+    uint16_t angle;         // 方向盘角度 (0-65535)
+    uint8_t joystick_x;     // 左摇杆 X (0-255, 中心128)
+    uint8_t joystick_y;     // 左摇杆 Y (0-255, 中心128)
+    uint8_t trigger_left;   // 左扳机 (0-255)
+    uint8_t trigger_right;  // 右扳机 (0-255)
+    uint32_t buttons;       // 32个按钮，每个bit代表一个按钮
+} __attribute__((packed));
 
-void hid_mouse_init(void);
-void hid_mouse_test(void);
+struct hid_handle_down {
+    int16_t f_const;        // 常量力
+    int16_t f_period;       // 周期力
+    int16_t f_condition;    // 弹簧力、阻尼力
+    int16_t gain;           // 增益
+    int16_t on_off;
+};
 
+#if 0
+struct hid_handle_feature {
+    uint8_t config_id;       // 配置项 ID
+    uint8_t data[7];         // 配置数据
+} __attribute__((packed));
+#endif
+
+// 全局报告实例
+extern struct hid_handle_up handle_up;
+extern struct hid_handle_down handle_down;
+
+void hid_handle_init(void);
+void handle_upload(void);
 
 #endif

@@ -435,9 +435,9 @@
               <FilePath>..\Src\myAPP_led.c</FilePath>
             </File>
             <File>
-              <FileName>usbd_hid_mouse_if.c</FileName>
+              <FileName>usbd_hid_handle_if.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Src\usbd_hid_mouse_if.c</FilePath>
+              <FilePath>..\Src\usbd_hid_handle_if.c</FilePath>
             </File>
           </Files>
         </Group>

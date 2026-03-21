@@ -129,11 +129,11 @@ int main(void){
     
     // 启动调度器
     #ifndef ltx_cfg_USE_IDLE_TASK
-    // 不开启空闲任务功能，则直接在主循环运行调度器
-    LTX_LOG_INFO("Start scheduler...\n");
-    ltx_Sys_scheduler();
+        // 不开启空闲任务功能，则直接在主循环运行调度器
+        LTX_LOG_INFO("Start scheduler...\n");
+        ltx_Sys_scheduler();
     #endif
-    // 开启空闲休眠，调度器需要放到 pendsv
+    // 开启空闲休眠的话，调度器需要放到 pendsv
 
     // 运行空闲任务
     LTX_LOG_INFO("Start idle task...\n");
@@ -142,19 +142,6 @@ int main(void){
         // __DSB();
         __WFI();
     }
-
-
-
-#if 0
-    while (1)
-    {
-        /* Delay for 1s */
-        HAL_Delay(1000);
-
-        /* Call the test function to send data to the USB host */
-        cdc_acm_data_send_with_dtr_test();
-    }
-#endif
 }
 
 
@@ -554,7 +541,7 @@ static void mcu_init_usb(void)
     __HAL_RCC_USB_CLK_ENABLE();
 
     // cdc_acm_init();
-    hid_mouse_init();
+    hid_handle_init();
 
     /* Enable USB interrupt */
     HAL_NVIC_SetPriority(USBD_IRQn, 3, 0U);
