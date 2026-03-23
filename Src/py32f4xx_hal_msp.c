@@ -136,7 +136,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi){
         GPIO_InitStruct.Pull      = GPIO_NOPULL;
         HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
         /* Interrupt configuration */
-        HAL_NVIC_SetPriority(SPI1_IRQn, 4, 0);
+        HAL_NVIC_SetPriority(SPI1_IRQn, 2, 0);
         HAL_NVIC_EnableIRQ(SPI1_IRQn);
 
     #if 0
@@ -260,19 +260,19 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
     __HAL_RCC_GPIOB_CLK_ENABLE();                               /* Enable GPIOB clock */
 
     // 电流采样
-    if (hadc->Instance == ADC1){
+    if (hadc->Instance == ADC2){
     
-        GPIO_InitStruct.Pin = GPIO_PIN_6 |GPIO_PIN_7 ;
+        GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
         GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
         GPIO_InitStruct.Pull = GPIO_NOPULL;
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
         
-        HAL_NVIC_SetPriority(ADC1_IRQn, 2, 0);
+        HAL_NVIC_SetPriority(ADC1_IRQn, 1, 0);
         HAL_NVIC_EnableIRQ(ADC1_IRQn);
     }
 
     // 摇杆等
-    if (hadc->Instance == ADC2){
+    if (hadc->Instance == ADC1){
     
         GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_5;
         GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
@@ -283,26 +283,24 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
         GPIO_InitStruct.Pull = GPIO_NOPULL;
         HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
         
-        // HAL_NVIC_SetPriority(ADC1_IRQn, 1, 0);
-        // HAL_NVIC_EnableIRQ(ADC1_IRQn);
-        
-        // hdma1ch2_handler.Instance                 = DMA1_Channel2;
-        // hdma1ch2_handler.Init.Direction           = DMA_PERIPH_TO_MEMORY;    /* Transfer mode Periph to Memory */
-        // hdma1ch2_handler.Init.PeriphInc           = DMA_PINC_DISABLE;        /* Peripheral increment mode Disable */
-        // hdma1ch2_handler.Init.MemInc              = DMA_MINC_ENABLE;         /* Memory increment mode Enable */
-        // hdma1ch2_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;     /* Peripheral data alignment : Word  */
-        // hdma1ch2_handler.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;     /* Memory data alignment : Word  */
-        // hdma1ch2_handler.Init.Mode                = DMA_CIRCULAR;            /* Circular DMA mode */
-        // hdma1ch2_handler.Init.Priority            = DMA_PRIORITY_VERY_HIGH;  /* Priority level : high  */
+        hdma1ch1_handler.Instance                 = DMA1_Channel1;
+        hdma1ch1_handler.Init.Direction           = DMA_PERIPH_TO_MEMORY;    /* Transfer mode Periph to Memory */
+        hdma1ch1_handler.Init.PeriphInc           = DMA_PINC_DISABLE;        /* Peripheral increment mode Disable */
+        hdma1ch1_handler.Init.MemInc              = DMA_MINC_ENABLE;         /* Memory increment mode Enable */
+        hdma1ch1_handler.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;     /* Peripheral data alignment : Word  */
+        hdma1ch1_handler.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;     /* Memory data alignment : Word  */
+        hdma1ch1_handler.Init.Mode                = DMA_CIRCULAR;
+        hdma1ch1_handler.Init.Priority            = DMA_PRIORITY_LOW;
 
-        // HAL_DMA_DeInit(&hdma1ch2_handler);
-        // HAL_DMA_Init(&hdma1ch2_handler);
+        HAL_DMA_DeInit(&hdma1ch1_handler);
+        HAL_DMA_Init(&hdma1ch1_handler);
         
-        // HAL_DMA_ChannelMap(&hdma1ch2_handler, DMA_CHANNEL_MAP_ADC1);          /* DMA Channel Remap */
-        // __HAL_LINKDMA(hadc, DMA_Handle, hdma1ch2_handler);
+        HAL_DMA_ChannelMap(&hdma1ch1_handler, DMA_CHANNEL_MAP_ADC1);          /* DMA Channel Remap */
+        __HAL_LINKDMA(hadc, DMA_Handle, hdma1ch1_handler);
         
-        // HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 1, 0);
-        // HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+        // 不用中断
+        // HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
+        // HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
     }
 }
 

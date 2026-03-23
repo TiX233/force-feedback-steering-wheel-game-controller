@@ -380,33 +380,34 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi){
     ltx_Topic_publish(&topic_mag_read_over);
 }
 
+#define MOTOR_ADC_INSTANCE      ADC2
 float adc1_offset[3] = {2048.0f, 2048.0f, 2048.0f};
 // 直接在中断中展开，不调用 HAL 库回调
 void ADC1_2_IRQHandler(void){
     static uint8_t count_spi_busy = 0;
     // 检查是否为注入组转换结束中断（JEOC）
-    if ((ADC1->SR & ADC_FLAG_JEOC) && (ADC1->CR1 & ADC_IT_JEOC)){
+    if ((MOTOR_ADC_INSTANCE->SR & ADC_FLAG_JEOC) && (MOTOR_ADC_INSTANCE->CR1 & ADC_IT_JEOC)){
 
-    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
         // 读 adc 并转换三相电流耗时 0.74us，怎么硬件浮点数还这么慢，离谱
 
         // 读取 adc 数值
-        adc1_buffer[2] = ADC1->JDR1;
-        adc1_buffer[0] = ADC1->JDR2;
+        adc1_buffer[2] = MOTOR_ADC_INSTANCE->JDR1;
+        adc1_buffer[0] = MOTOR_ADC_INSTANCE->JDR2;
 
         // 换算 adc 值为电流
         ltx_bldc_trans_current_u(motor_foc, adc1_buffer[0]);
         ltx_bldc_trans_current_w(motor_foc, adc1_buffer[2]);
         ltx_bldc_trans_current_v(motor_foc, 0);
 
-    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
         // 运行 foc1 算法，耗时 8.7us，耗时过长，会导致开启打印数据关中断期间撞上下次 adc 中断，影响电流环响应，造成电机抖动
         // ltx_foc1_algorithm_1(&motor_foc);
 
         // 运行 foc2 算法，耗时 4.9us
         ltx_foc2_algorithm(&motor_foc);
         
-    GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
+    // GPIOA->BSRR = (uint32_t)GPIO_PIN_15;
         // 计算输出以及发布事件耗时 0.56us
 
         // 根据是否初始化来决定是否要将 foc 算法得出的三相电压值输出
@@ -419,14 +420,14 @@ void ADC1_2_IRQHandler(void){
         // 发布采样完成事件
         ltx_Topic_publish(&topic_adc1_update);
 
-    GPIOA->BRR = (uint32_t)GPIO_PIN_15;
+    // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
         // 启动下一次注入组采样（直接寄存器操作）
         // 清除JEOC标志（写 1 清零，注意原代码在最后统一清除，但建议尽早清除避免重复触发）
-        ADC1->SR = ~ADC_FLAG_JEOC; // 仅清除JEOC，其他位不受影响
+        MOTOR_ADC_INSTANCE->SR = ~ADC_FLAG_JEOC; // 仅清除JEOC，其他位不受影响
         // 确保JEOC中断使能（若已使能可省略，但安全起见可再次使能）
-        ADC1->CR1 |= ADC_IT_JEOC;
+        MOTOR_ADC_INSTANCE->CR1 |= ADC_IT_JEOC;
         // 软件触发注入组转换（需同时置位 JSWSTART 和 JEXTTRIG）
-        ADC1->CR2 |= (ADC_CR2_JSWSTART | ADC_CR2_JEXTTRIG);
+        MOTOR_ADC_INSTANCE->CR2 |= (ADC_CR2_JSWSTART | ADC_CR2_JEXTTRIG);
 
         // mt6701_read_dma(&mag_encoder_wheel); // 发起 dma 读取磁编
         // if(!HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5)){
@@ -439,8 +440,10 @@ void ADC1_2_IRQHandler(void){
             return ;
         }
 
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+        // 拉低片选
+        // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
         GPIOB->BRR = (uint32_t)GPIO_PIN_5;
+        // 中断接收
         if(HAL_SPI_Receive_IT(&hspi1_handler, mag_encoder_wheel.data_buffer, 1) != HAL_OK){
             HAL_SPI_Abort_IT(&hspi1_handler);
             LTX_LOG_WARN("SPI1 ERR: %d\n", hspi1_handler.ErrorCode);

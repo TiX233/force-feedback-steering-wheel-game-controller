@@ -439,6 +439,11 @@
               <FileType>1</FileType>
               <FilePath>..\Src\usbd_hid_handle_if.c</FilePath>
             </File>
+            <File>
+              <FileName>myAPP_button.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Src\myAPP_button.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

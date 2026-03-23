@@ -94,12 +94,12 @@
 
 // 数据结构定义
 struct hid_handle_up {
-    uint16_t angle;         // 方向盘角度 (0-65535)
-    uint8_t joystick_x;     // 左摇杆 X (0-255, 中心128)
-    uint8_t joystick_y;     // 左摇杆 Y (0-255, 中心128)
-    uint8_t trigger_left;   // 左扳机 (0-255)
-    uint8_t trigger_right;  // 右扳机 (0-255)
-    uint32_t buttons;       // 32个按钮，每个bit代表一个按钮
+    int16_t wheel;              // 方向盘 (0-65535)
+    uint8_t joystick_x;         // 左摇杆 X (0-255, 中心128)
+    uint8_t joystick_y;         // 左摇杆 Y (0-255, 中心128)
+    uint8_t trigger_left;       // 左扳机 (0-255)
+    uint8_t trigger_right;      // 右扳机 (0-255)
+    uint32_t buttons;           // 32个按钮，每个bit代表一个按钮
 } __attribute__((packed));
 
 struct hid_handle_down {
@@ -122,6 +122,6 @@ extern struct hid_handle_up handle_up;
 extern struct hid_handle_down handle_down;
 
 void hid_handle_init(void);
-void handle_upload(void);
+int handle_upload(void);
 
 #endif

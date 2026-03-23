@@ -57,11 +57,11 @@ TIM_HandleTypeDef htim1_handler;
 
 // 外设 adc
 ADC_HandleTypeDef hadc2_handler;
+DMA_HandleTypeDef hdma1ch1_handler;
 
 // 磁编
 // I2C_HandleTypeDef hi2c1_handler;
 SPI_HandleTypeDef hspi1_handler;
-DMA_HandleTypeDef hdma1ch1_handler;
 
 
 /* Private user code ---------------------------------------------------------*/
@@ -101,15 +101,16 @@ int main(void){
     ltx_Log_init();
     LTX_LOG_STR("\n\nSYSTEM START\n\n");
     mcu_init_btn_pin();
+    // 因为 adc2 不支持 dma，所以 adc1 与 adc2 进行了内部交换，所以代码里面的命名是反的
     mcu_init_adc1();
-    // adc1 较准
+    // adc1 较准，电机采样
     if(HAL_ADCEx_Calibration_Start(&hadc1_handler) != HAL_OK)
-        while(1){ LTX_LOG_ERRO("ADC calibration Failed!\n"); HAL_Delay(1000); }
+        while(1){ LTX_LOG_ERRO("ADC1 calibration Failed!\n"); HAL_Delay(1000); }
 
     mcu_init_adc2();
-    // adc 较准
+    // adc2 较准，摇杆采样
     if(HAL_ADCEx_Calibration_Start(&hadc2_handler) != HAL_OK)
-        while(1){ LTX_LOG_ERRO("ADC calibration Failed!\n"); HAL_Delay(1000); }
+        while(1){ LTX_LOG_ERRO("ADC2 calibration Failed!\n"); HAL_Delay(1000); }
 
     mcu_init_tim1();
     mcu_init_spi2();
@@ -328,13 +329,13 @@ static void mcu_init_adc1(void){
     ADC_ChannelConfTypeDef   adc_channel_config={0};
     RCC_PeriphCLKInitTypeDef RCC_PeriphCLKInit={0};
     
-    __HAL_RCC_ADC1_CLK_ENABLE();
+    __HAL_RCC_ADC2_CLK_ENABLE();
     
     RCC_PeriphCLKInit.PeriphClockSelection= RCC_PERIPHCLK_ADC;
     RCC_PeriphCLKInit.AdcClockSelection   = RCC_ADCPCLK2_DIV8; // 16Mhz
     HAL_RCCEx_PeriphCLKConfig(&RCC_PeriphCLKInit);
     
-    hadc1_handler.Instance = ADC1;
+    hadc1_handler.Instance = ADC2;
     
     hadc1_handler.Init.Resolution            = ADC_RESOLUTION_12B;             /* 12-bit resolution for converted data  */
     hadc1_handler.Init.DataAlign             = ADC_DATAALIGN_RIGHT;            /* Right-alignment for converted data */
@@ -418,14 +419,14 @@ static void mcu_init_adc1(void){
 static void mcu_init_adc2(void){
     ADC_ChannelConfTypeDef   adc_channel_config={0};
     // RCC_PeriphCLKInitTypeDef RCC_PeriphCLKInit={0};
-    
-    __HAL_RCC_ADC2_CLK_ENABLE();
+
+    __HAL_RCC_ADC1_CLK_ENABLE();
     
     // RCC_PeriphCLKInit.PeriphClockSelection= RCC_PERIPHCLK_ADC;
     // RCC_PeriphCLKInit.AdcClockSelection   = RCC_ADCPCLK2_DIV8;
     // HAL_RCCEx_PeriphCLKConfig(&RCC_PeriphCLKInit);
     
-    hadc2_handler.Instance = ADC2;
+    hadc2_handler.Instance = ADC1;
     
     hadc2_handler.Init.Resolution            = ADC_RESOLUTION_12B;             /* 12-bit resolution for converted data  */
     hadc2_handler.Init.DataAlign             = ADC_DATAALIGN_RIGHT;            /* Right-alignment for converted data */
@@ -443,6 +444,7 @@ static void mcu_init_adc2(void){
         }
     }
 
+    // 摇杆左右
     adc_channel_config.Channel      = ADC_CHANNEL_0;
     adc_channel_config.Rank         = ADC_REGULAR_RANK_1;
     adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
@@ -454,9 +456,10 @@ static void mcu_init_adc2(void){
         }
     }
     
+    // 摇杆前后
     adc_channel_config.Channel      = ADC_CHANNEL_1;
     adc_channel_config.Rank         = ADC_REGULAR_RANK_2;
-    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    // adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
     if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){
@@ -465,9 +468,10 @@ static void mcu_init_adc2(void){
         }
     }
     
+    // 左扳机
     adc_channel_config.Channel      = ADC_CHANNEL_5;
     adc_channel_config.Rank         = ADC_REGULAR_RANK_3;
-    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    // adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
     if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){
@@ -476,9 +480,10 @@ static void mcu_init_adc2(void){
         }
     }
     
+    // 右扳机
     adc_channel_config.Channel      = ADC_CHANNEL_8;
     adc_channel_config.Rank         = ADC_REGULAR_RANK_4;
-    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    // adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
     if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){
@@ -487,9 +492,10 @@ static void mcu_init_adc2(void){
         }
     }
     
+    // 挡杆左右
     adc_channel_config.Channel      = ADC_CHANNEL_9;
     adc_channel_config.Rank         = ADC_REGULAR_RANK_5;
-    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    // adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
     
     if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){
@@ -505,7 +511,7 @@ static void mcu_init_btn_pin(void){
     __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
     
-#if 0
+#if 1
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
 #else

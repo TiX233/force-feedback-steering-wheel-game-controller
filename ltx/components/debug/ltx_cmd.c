@@ -10,6 +10,7 @@
 #include "myAPP_system.h"
 #include "myAPP_motor.h"
 #include "myAPP_device_init.h"
+#include "myAPP_button.h"
 #include "mt6701.h"
 #include "ws2812.h"
 #include "usb_config.h"
@@ -456,6 +457,17 @@ void print_cb_adc1(void *param){
     // GPIOA->BRR = (uint32_t)GPIO_PIN_15;
 }
 
+// 手柄 adc 打印回调
+extern uint32_t handle_adc_row_data[5];
+void print_cb_adc2(void *param){
+    LTX_LOG_FMT("A2:%x %x %x %x %x\n", handle_adc_row_data[0],
+                                    handle_adc_row_data[1],
+                                    handle_adc_row_data[2],
+                                    handle_adc_row_data[3],
+                                    handle_adc_row_data[4]);
+    // LTX_LOG_FMT("A2:%d\n", ADC2->DR);
+}
+
 #if 0
 // 电流弧度与机械弧度
 void print_cb_am_rad(void *param){
@@ -537,6 +549,8 @@ struct {
     _P_DATA_INFO("vabc", &topic_adc1_update, print_cb_vabc),
     // 电机转速
     _P_DATA_INFO("rpm", &(script_speed.alarm_next_run.topic), print_cb_rpm),
+    // 手柄 adc 原始值
+    _P_DATA_INFO("adc2", &topic_hid_upload_over, print_cb_adc2),
 
     // 列表结尾项
     {.item_name = " ",},
