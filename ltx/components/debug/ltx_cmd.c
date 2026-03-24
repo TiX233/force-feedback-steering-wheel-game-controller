@@ -42,6 +42,7 @@ void cmd_cb_zero_align(uint8_t argc, char *argv[]);
 void cmd_cb_speed_loop(uint8_t argc, char *argv[]);
 void cmd_cb_note_freq(uint8_t argc, char *argv[]);
 void cmd_cb_hid_send_btn(uint8_t argc, char *argv[]);
+void cmd_cb_wheel_test(uint8_t argc, char *argv[]);
 
 ltx_Cmd_item cmd_list[] = {
     {
@@ -140,6 +141,12 @@ ltx_Cmd_item cmd_list[] = {
         .brief = "hid_send_btn",
         .cmd_cb = cmd_cb_hid_send_btn,
     },
+
+    {.cmd_name = "wheel_test",
+        .brief = "direct set/get wheel param",
+        .cmd_cb = cmd_cb_wheel_test,
+    },
+
 
 
     // end of list:
@@ -1164,6 +1171,10 @@ Useage_note_freq:
 extern volatile uint8_t hid_up_state;
 // hid 测试发送命令
 void cmd_cb_hid_send_btn(uint8_t argc, char *argv[]){
+    if(argv[0][0] != '#'){
+        LTX_LOG_WARN("PERMISSION DENIED!\n");
+        return ;
+    }
     if(argc < 2){
         goto Useage_hid_send;
     }
@@ -1178,4 +1189,44 @@ void cmd_cb_hid_send_btn(uint8_t argc, char *argv[]){
     return ;
 Useage_hid_send:
     LTX_LOG_INFO("Useage: %s <btn32(0x0~0xFFFFFFFF)>\n", argv[0]);
+}
+
+
+// 方向盘测试命令
+void cmd_cb_wheel_test(uint8_t argc, char *argv[]){
+    if(argc < 2){
+        goto Useage_wheel_test;
+    }
+
+    switch(argv[1][1]){
+        case 's': // 设置
+            switch(argv[1][6]){
+                case 'a': // 设置单边最大旋转圈数
+                    if(argc < 3){
+                        goto Useage_wheel_test;
+                    }
+                    float mxt;
+                    sscanf(argv[2], "%f", &mxt);
+                    handle_wheel_set_max_turns(&handle_wheel_data, mxt*100);
+                    LTX_LOG_INFO("Set max_turns to: %f\n", mxt);
+                    break;
+
+                case 'i': // 设置当前位置为中点
+                    handle_wheel_set_zero(&handle_wheel_data);
+                    LTX_LOG_INFO("Set mid ok\n");
+                    break;
+            }
+            break;
+
+        case 'g': // 获取超出范围
+            LTX_LOG_INFO("Overrun: %d\n", handle_wheel_get_overrun(&handle_wheel_data));
+            break;
+
+        default:
+            goto Useage_wheel_test;
+    }
+
+    return ;
+Useage_wheel_test:
+    LTX_LOG_INFO("Useage: %s <-set_max_turn/-set_mid/-get_overrun> [val]\n", argv[0]);
 }

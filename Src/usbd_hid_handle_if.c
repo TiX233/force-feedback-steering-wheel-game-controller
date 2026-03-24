@@ -36,47 +36,6 @@ static const uint8_t hid_handle_report_desc[] = {
     0x09, 0x04,        // USAGE (Joystick)
     0xA1, 0x01,        // COLLECTION (Application)
 
-    // ---------- 1. 输入报告（无报告ID）----------
-    // 方向盘轴（使用 Simulation Controls 的 Steering）
-    0x05, 0x02,        //   USAGE_PAGE (Simulation Controls)
-    0x09, 0xBA,        //   USAGE (Steering)
-    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
-    0x26, 0xFF, 0x7F,  //   LOGICAL_MAXIMUM (32767)
-    0x75, 0x10,        //   REPORT_SIZE (16)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0x81, 0x02,        //   INPUT (Data,Var,Abs)
-
-    // 按钮（例如 16 个按钮）
-    0x05, 0x09,        //   USAGE_PAGE (Button)
-    0x19, 0x01,        //   USAGE_MINIMUM (Button 1)
-    0x29, 0x10,        //   USAGE_MAXIMUM (Button 16)
-    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
-    0x25, 0x01,        //   LOGICAL_MAXIMUM (1)
-    0x75, 0x01,        //   REPORT_SIZE (1)
-    0x95, 0x10,        //   REPORT_COUNT (16)
-    0x81, 0x02,        //   INPUT (Data,Var,Abs)
-
-    // ---------- 2. 输出报告（无报告ID，8字节）----------
-    // 必须包含 PID Page 的 Usage，并给出 Logical 范围
-    0x05, 0x0F,        //   USAGE_PAGE (Physical Interface Device)
-    0x09, 0x21,        //   USAGE (Set Effect Report)  // 任意 PID Usage 均可
-    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
-    0x26, 0xFF, 0x00,  //   LOGICAL_MAXIMUM (255)
-    0x75, 0x08,        //   REPORT_SIZE (8)
-    0x95, 0x08,        //   REPORT_COUNT (8)
-    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
-
-    0xC0               // END_COLLECTION (Application)
-};
-#endif
-
-#if 0
-static const uint8_t hid_handle_report_desc[] = {
-    // ==================== 应用集合开始 ====================
-    0x05, 0x01,        // USAGE_PAGE (Generic Desktop)
-    0x09, 0x04,        // USAGE (Joystick)
-    0xA1, 0x01,        // COLLECTION (Application)
-
     // ---------- 1. 输入报告 (ID=1) ----------
     0x85, 0x01,              // REPORT_ID (0x01)
     
@@ -303,210 +262,6 @@ static const uint8_t hid_handle_report_desc[] = {
     0x75, 0x08,        //   REPORT_SIZE (8)
     0x95, 0x08,        //   REPORT_COUNT (8)
     0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
-    0xC0,              // END_COLLECTION
-
-    0xC0               // END_COLLECTION (Application)
-};
-#endif
-#if 0
-static const uint8_t hid_handle_report_desc[] = {
-    // ========== 应用集合 ==========
-    0x05, 0x01,        // USAGE_PAGE (Generic Desktop)
-    0x09, 0x04,        // USAGE (Joystick)
-    0xA1, 0x01,        // COLLECTION (Application)
-
-    // ---------- 输入报告 (ID=1) ----------
-    0x85, 0x01,        // REPORT_ID (1)
-    // 方向盘轴
-    0x05, 0x02,        // USAGE_PAGE (Simulation Controls)
-    0x09, 0xBA,        // USAGE (Steering)
-    0x15, 0x00,        // LOGICAL_MINIMUM (0)
-    0x26, 0xFF, 0x7F,  // LOGICAL_MAXIMUM (32767)
-    0x75, 0x10,        // REPORT_SIZE (16)
-    0x95, 0x01,        // REPORT_COUNT (1)
-    0x81, 0x02,        // INPUT (Data,Var,Abs)
-    // 4个模拟轴 (X,Y,Z,Rx)
-    0x05, 0x01,        // USAGE_PAGE (Generic Desktop)
-    0x09, 0x30,        // USAGE (X)
-    0x09, 0x31,        // USAGE (Y)
-    0x09, 0x32,        // USAGE (Z)
-    0x09, 0x33,        // USAGE (Rx)
-    0x15, 0x00,        // LOGICAL_MINIMUM (0)
-    0x26, 0xFF, 0x00,  // LOGICAL_MAXIMUM (255)
-    0x75, 0x08,        // REPORT_SIZE (8)
-    0x95, 0x04,        // REPORT_COUNT (4)
-    0x81, 0x02,        // INPUT (Data,Var,Abs)
-    // 32个按钮
-    0x05, 0x09,        // USAGE_PAGE (Button)
-    0x19, 0x01,        // USAGE_MINIMUM (Button 1)
-    0x29, 0x20,        // USAGE_MAXIMUM (Button 32)
-    0x15, 0x00,        // LOGICAL_MINIMUM (0)
-    0x25, 0x01,        // LOGICAL_MAXIMUM (1)
-    0x75, 0x01,        // REPORT_SIZE (1)
-    0x95, 0x20,        // REPORT_COUNT (32)
-    0x81, 0x02,        // INPUT (Data,Var,Abs)
-
-    // ========== PID 报告 ==========
-    // 1. PID State Report (Feature, ID=2)
-    0x05, 0x0F,        // USAGE_PAGE (Physical Interface Device)
-    0x09, 0x92,        // USAGE (PID State Report)
-    0xA1, 0x02,        // COLLECTION (Logical)
-    0x85, 0x02,        //   REPORT_ID (2)
-    // 4个布尔状态位，占用1个字节
-    0x09, 0x9F,        //   USAGE (Device is Pause)
-    0x09, 0xA0,        //   USAGE (Actuators Enabled)
-    0x09, 0xA4,        //   USAGE (Safety Switch)
-    0x09, 0xA6,        //   USAGE (Actuator Power)
-    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
-    0x25, 0x01,        //   LOGICAL_MAXIMUM (1)
-    0x75, 0x01,        //   REPORT_SIZE (1)
-    0x95, 0x04,        //   REPORT_COUNT (4)
-    0x81, 0x02,        //   INPUT (Data,Var,Abs)
-    0x95, 0x04,        //   REPORT_COUNT (4)  // 填充到1字节
-    0x81, 0x03,        //   INPUT (Constant,Var)
-    0xC0,              // END_COLLECTION
-
-    // 2. PID Device Control (Output, ID=3)
-    0x09, 0x95,        // USAGE (PID Device Control)
-    0xA1, 0x02,        // COLLECTION (Logical)
-    0x85, 0x03,        //   REPORT_ID (3)
-    0x09, 0x96,        //   USAGE (PID Device Control Command)
-    0xA1, 0x02,        //   COLLECTION (Logical)
-    0x09, 0x97,        //     USAGE (DC Enable Actuators)
-    0x09, 0x98,        //     USAGE (DC Disable Actuators)
-    0x09, 0x99,        //     USAGE (DC Stop All Effects)
-    0x09, 0x9A,        //     USAGE (DC Device Reset)
-    0x09, 0x9B,        //     USAGE (DC Device Pause)
-    0x09, 0x9C,        //     USAGE (DC Device Continue)
-    0x15, 0x01,        //     LOGICAL_MINIMUM (1)
-    0x25, 0x06,        //     LOGICAL_MAXIMUM (6)
-    0x75, 0x08,        //     REPORT_SIZE (8)
-    0x95, 0x01,        //     REPORT_COUNT (1)
-    0x91, 0x00,        //     OUTPUT (Data,Ary,Abs)
-    0xC0,              //   END_COLLECTION
-    0xC0,              // END_COLLECTION
-
-    // 3. Set Effect Report (Output, ID=4) - 最简版，只支持常量力
-    0x09, 0x21,        // USAGE (Set Effect Report)
-    0xA1, 0x02,        // COLLECTION (Logical)
-    0x85, 0x04,        //   REPORT_ID (4)
-    0x09, 0x22,        //   USAGE (Effect Block Index)
-    0x15, 0x01,        //   LOGICAL_MINIMUM (1)
-    0x25, 0x20,        //   LOGICAL_MAXIMUM (32)
-    0x75, 0x08,        //   REPORT_SIZE (8)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
-    0x09, 0x25,        //   USAGE (Effect Type)
-    0x15, 0x01,        //   LOGICAL_MINIMUM (1)
-    0x25, 0x01,        //   LOGICAL_MAXIMUM (1)  // 只支持常量力 (ET Constant Force)
-    0x75, 0x08,        //   REPORT_SIZE (8)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
-    0x09, 0x50,        //   USAGE (Duration)
-    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
-    0x26, 0xFF, 0x7F,  //   LOGICAL_MAXIMUM (32767)
-    0x75, 0x10,        //   REPORT_SIZE (16)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
-    0x09, 0x52,        //   USAGE (Gain)
-    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
-    0x26, 0xFF, 0x00,  //   LOGICAL_MAXIMUM (255)
-    0x75, 0x08,        //   REPORT_SIZE (8)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
-    0x09, 0x55,        //   USAGE (Axes Enable)
-    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
-    0x25, 0x01,        //   LOGICAL_MAXIMUM (1)
-    0x75, 0x08,        //   REPORT_SIZE (8)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)  // 用一个字节表示轴掩码
-    0xC0,              // END_COLLECTION
-
-    // 4. Set Constant Force Report (Output, ID=5)
-    0x09, 0x73,        // USAGE (Set Constant Force Report)
-    0xA1, 0x02,        // COLLECTION (Logical)
-    0x85, 0x05,        //   REPORT_ID (5)
-    0x09, 0x22,        //   USAGE (Effect Block Index)
-    0x15, 0x01,        //   LOGICAL_MINIMUM (1)
-    0x25, 0x20,        //   LOGICAL_MAXIMUM (32)
-    0x75, 0x08,        //   REPORT_SIZE (8)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
-    0x09, 0x70,        //   USAGE (Magnitude)
-    0x16, 0x00, 0x80,  //   LOGICAL_MINIMUM (-32768)
-    0x26, 0xFF, 0x7F,  //   LOGICAL_MAXIMUM (32767)
-    0x75, 0x10,        //   REPORT_SIZE (16)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
-    0xC0,              // END_COLLECTION
-
-    // 5. Effect Operation Report (Output, ID=6)
-    0x09, 0x77,        // USAGE (Effect Operation Report)
-    0xA1, 0x02,        // COLLECTION (Logical)
-    0x85, 0x06,        //   REPORT_ID (6)
-    0x09, 0x22,        //   USAGE (Effect Block Index)
-    0x15, 0x01,        //   LOGICAL_MINIMUM (1)
-    0x25, 0x20,        //   LOGICAL_MAXIMUM (32)
-    0x75, 0x08,        //   REPORT_SIZE (8)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
-    0x09, 0x78,        //   USAGE (Effect Operation)
-    0xA1, 0x02,        //   COLLECTION (Logical)
-    0x09, 0x79,        //     USAGE (Op Effect Start)
-    0x09, 0x7A,        //     USAGE (Op Effect Start Solo)
-    0x09, 0x7B,        //     USAGE (Op Effect Stop)
-    0x15, 0x01,        //     LOGICAL_MINIMUM (1)
-    0x25, 0x03,        //     LOGICAL_MAXIMUM (3)
-    0x75, 0x08,        //     REPORT_SIZE (8)
-    0x95, 0x01,        //     REPORT_COUNT (1)
-    0x91, 0x00,        //     OUTPUT (Data,Ary,Abs)
-    0xC0,              //   END_COLLECTION
-    0x09, 0x7C,        //   USAGE (Loop Count)
-    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
-    0x26, 0xFF, 0x00,  //   LOGICAL_MAXIMUM (255)
-    0x75, 0x08,        //   REPORT_SIZE (8)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
-    0xC0,              // END_COLLECTION
-
-    // 6. Block Free Report (Output, ID=7)
-    0x09, 0x90,        // USAGE (PID Block Free Report)
-    0xA1, 0x02,        // COLLECTION (Logical)
-    0x85, 0x07,        //   REPORT_ID (7)
-    0x09, 0x22,        //   USAGE (Effect Block Index)
-    0x15, 0x01,        //   LOGICAL_MINIMUM (1)
-    0x25, 0x20,        //   LOGICAL_MAXIMUM (32)
-    0x75, 0x08,        //   REPORT_SIZE (8)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
-    0xC0,              // END_COLLECTION
-
-    // 7. PID Pool Report (Feature, ID=8) - 告诉Windows设备能力
-    0x09, 0x7F,        // USAGE (PID Pool Report)
-    0xA1, 0x02,        // COLLECTION (Logical)
-    0x85, 0x08,        //   REPORT_ID (8)
-    0x09, 0x80,        //   USAGE (RAM Pool Size)
-    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
-    0x27, 0xFF, 0xFF, 0x00, 0x00, // LOGICAL_MAXIMUM (65535)
-    0x75, 0x10,        //   REPORT_SIZE (16)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0xB1, 0x02,        //   FEATURE (Data,Var,Abs)
-    0x09, 0x83,        //   USAGE (Simultaneous Effects Max)
-    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
-    0x26, 0xFF, 0x00,  //   LOGICAL_MAXIMUM (255)
-    0x75, 0x08,        //   REPORT_SIZE (8)
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0xB1, 0x02,        //   FEATURE (Data,Var,Abs)
-    0x09, 0xA9,        //   USAGE (Device Managed Pool)
-    0x09, 0xAA,        //   USAGE (Shared Parameter Blocks)
-    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
-    0x25, 0x01,        //   LOGICAL_MAXIMUM (1)
-    0x75, 0x01,        //   REPORT_SIZE (1)
-    0x95, 0x02,        //   REPORT_COUNT (2)
-    0xB1, 0x02,        //   FEATURE (Data,Var,Abs)
-    0x75, 0x06,        //   REPORT_SIZE (6) // 填充到整字节
-    0x95, 0x01,        //   REPORT_COUNT (1)
-    0xB1, 0x03,        //   FEATURE (Constant,Var)
     0xC0,              // END_COLLECTION
 
     0xC0               // END_COLLECTION (Application)
@@ -1267,22 +1022,21 @@ static void usbd_hid_down_callback(uint8_t ep, uint32_t nbytes){
                 break;
         }
     }
-    #if 0
-    LTX_LOG_DEBG("HID: 0x%x %x %x %x %x %x, len: %d\n", hid_down_buffer[0],
-                                                        hid_down_buffer[1],
-                                                        hid_down_buffer[2],
-                                                        hid_down_buffer[3],
-                                                        hid_down_buffer[4],
-                                                        hid_down_buffer[5],
-                                                        nbytes);
-    LTX_LOG_DEBG("%x %x %x %x %x %x\n", hid_down_buffer[6],
-                                        hid_down_buffer[7],
-                                        hid_down_buffer[8],
-                                        hid_down_buffer[9],
-                                        hid_down_buffer[10],
-                                        hid_down_buffer[11]);
+    #if 1
+    LTX_LOG_FMT("L:%d,0x%x,%x,%x,%x,%x,%x,", nbytes,
+                                                hid_down_buffer[0],
+                                                hid_down_buffer[1],
+                                                hid_down_buffer[2],
+                                                hid_down_buffer[3],
+                                                hid_down_buffer[4],
+                                                hid_down_buffer[5]);
+    LTX_LOG_FMT("%x,%x,%x,%x,%x,%x\n", hid_down_buffer[6],
+                                                hid_down_buffer[7],
+                                                hid_down_buffer[8],
+                                                hid_down_buffer[9],
+                                                hid_down_buffer[10],
+                                                hid_down_buffer[11]);
     #endif
-    LTX_LOG_DEBG("HID: 0x%x\n", hid_down_buffer[0]);
     
     // 重新启动接收，准备下一次数据
     usbd_ep_start_read(ep, hid_down_buffer, HID_OUT_EP_SIZE);
@@ -1434,8 +1188,8 @@ int handle_upload(void){
     report[0] = 0x01; // Report ID (与描述符一致)
 
         // 填充数据（按描述符顺序）
-        report[1] = (handle_up.wheel >> 8) & 0xFF;
-        report[2] = handle_up.wheel & 0xFF;
+        report[1] = handle_up.wheel & 0xFF;
+        report[2] = (handle_up.wheel >> 8) & 0xFF;
         report[3] = handle_up.joystick_x;
         report[4] = handle_up.joystick_y;
         report[5] = handle_up.trigger_left;

@@ -3,10 +3,9 @@
 #include "ltx_app.h"
 #include "ltx_log.h"
 #include "ltx_script.h"
-#include "ltx_lock.h"
 #include "math.h"
 #include "mt6701.h"
-#include "ltx_foc1.h"
+// #include "ltx_foc1.h"
 #include "ltx_foc2.h"
 #include "ltx_pid.h"
 
@@ -26,53 +25,6 @@ struct mt6701_stu mag_encoder_wheel = {
 };
 
 // 电机 foc 对象
-#if 0
-struct ltx_foc1_stu motor_foc = {
-    .flag_is_inited = 0,
-
-    .pole_pairs = 7, // 极对数 7
-
-    .vector_I_len = 0, // 当前输出电流向量模长
-    .vector_I_rad = 0, // 当前输出电流向量弧度，[0, 2pi)
-
-    .vector_V_len = 0, // 电压向量模长百分比，[0, 1]
-    .vector_V_rad = 0, // 电压向量弧度，[0, 2pi)
-
-    .pi_theta = { // 电流与转子夹角环
-        .kp = 0.01f,
-        .ki = 2.0f,
-        .error_prev = 0,
-        .theta = 0,
-    },
-    .pi_amplitude = { // 电流模长环
-        .kp = 0.8f,
-        .ki = 1.3f,
-        .integral = 0,
-        .limit_u = 0.5,
-        .limit_d = 0,
-    },
-
-    // 三相电压输出
-    .v_outputABC[0] = 0,
-    .v_outputABC[1] = 0,
-    .v_outputABC[2] = 0,
-    // 三相采集电流
-    .i_A = 0,
-    .i_B = 0,
-    .i_C = 0,
-
-    .target_I_len = 0, // 目标 输出电流向量模长
-    .target_I_rad = PI/2, // 目标 输出电流向量与转子夹角
-
-    .diff_len = 0,
-    .diff_rad = PI/2,
-
-    .rotor_rad = 0, // 转子弧度，[0, 2pi)
-
-    .dt = 0.05f, // foc 算法调用间隔，单位默认毫秒
-};
-#endif
-
 struct ltx_foc2_stu motor_foc = {
 
     .flag_is_inited = 0,
@@ -125,8 +77,6 @@ float mag_angle;
 // adc1 原始值
 uint32_t adc1_buffer[3];
 
-// 电机脚本
-// struct ltx_Script_stu script_motor;
 // 速度环脚本
 struct ltx_Script_stu script_speed;
 // 速度环 pi 对象
@@ -161,21 +111,21 @@ int myApp_motor_init(struct ltx_App_stu *app){
 
 int myApp_motor_pause(struct ltx_App_stu *app){
 
-    ltx_Script_pause(&script_speed);
+    // ltx_Script_pause(&script_speed);
     
     return 0;
 }
 
 int myApp_motor_resume(struct ltx_App_stu *app){
 
-    ltx_Script_resume(&script_speed, 0);
+    // ltx_Script_resume(&script_speed, 0);
     
     return 0;
 }
 
 int myApp_motor_destroy(struct ltx_App_stu *app){
     
-    ltx_Script_pause(&script_speed);
+    // ltx_Script_pause(&script_speed);
     // free...
 
     return 0;
@@ -205,7 +155,7 @@ float last_mag_rad; // 上次的磁编码读数
 float rpm_filtered = 0.0f;
 float rpm_lpf_coeff = 1.0f; // 低通滤波系数，1 为不开
 
-// 速度环脚本回调
+// 速度环脚本回调，测试用，力反馈只需要实现电流环
 void script_cb_speed(struct ltx_Script_stu *script){
 
     float speed_calculate;
@@ -430,9 +380,12 @@ void ADC1_2_IRQHandler(void){
         MOTOR_ADC_INSTANCE->CR2 |= (ADC_CR2_JSWSTART | ADC_CR2_JEXTTRIG);
 
         // mt6701_read_dma(&mag_encoder_wheel); // 发起 dma 读取磁编
+
+        // 判断是否完成发送，没有说明 spi 总线出问题或者此次 adc 回调被推迟太久
         // if(!HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5)){
         if(!(GPIOB->IDR & (uint32_t)GPIO_PIN_5)){
             if(count_spi_busy ++ > 5){
+                // 取消发送，修复总线
                 HAL_SPI_Abort_IT(&hspi1_handler);
                 count_spi_busy = 0;
                 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
@@ -440,6 +393,7 @@ void ADC1_2_IRQHandler(void){
             return ;
         }
 
+        // 发起中断接收磁编
         // 拉低片选
         // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
         GPIOB->BRR = (uint32_t)GPIO_PIN_5;

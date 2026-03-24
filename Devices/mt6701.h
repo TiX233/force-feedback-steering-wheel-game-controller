@@ -23,6 +23,7 @@
 struct mt6701_stu {
     uint8_t addr;
     float rad_offset; // 对弧度设置偏置
+    uint16_t data_row; // 原始数据
     uint8_t data_buffer[3];
 
     // void (*write_reg)(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num);
