@@ -444,6 +444,11 @@
               <FileType>1</FileType>
               <FilePath>..\Src\myAPP_button.c</FilePath>
             </File>
+            <File>
+              <FileName>myAPP_ffb.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Src\myAPP_ffb.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

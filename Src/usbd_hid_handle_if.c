@@ -4,6 +4,7 @@
 #include "ltx.h"
 #include "ltx_log.h"
 #include "myAPP_button.h"
+#include "myAPP_ffb.h"
 
 #define HID_INT_EP          0x81
 #define HID_INT_EP_SIZE     0x40    // 设为最大值，64
@@ -15,11 +16,9 @@
 
 // 如果需要修改 hid_handle_report_desc 报告描述符，那么还需要变更 vid/pid 才能让 windows 重新发起识别，否则不会有效
 // 填什么都行反正，只要不是别人的商用 vid/pid
-#define USBD_VID            0x1236
-#define USBD_PID            0xFFFF
+#define USBD_VID            0x2568
+#define USBD_PID            0x2333
 
-// #define USBD_VID            0x36b7
-// #define USBD_PID            0x2568
 #define USBD_MAX_POWER      100
 #define USBD_LANGID_STRING  1033
 
@@ -916,11 +915,11 @@ uint8_t hid_descriptor[] = {
 
 // 全局报告实例
 struct hid_handle_up handle_up;
-struct hid_handle_down handle_down;
 
 // hid 下行数据 buffer
 USB_MEM_ALIGNX uint8_t hid_down_buffer[64];
 
+// usb 初始化完成回调
 void usbd_configure_done_callback(void){
     // 开启 usb 接收
     usbd_ep_start_read(HID_OUT_EP, hid_down_buffer, HID_OUT_EP_SIZE);
@@ -929,100 +928,41 @@ void usbd_configure_done_callback(void){
 // 上行数据端点传输完成回调
 static void usbd_hid_up_callback(uint8_t ep, uint32_t nbytes){
 
-    // hid_up_state = HID_STATE_IDLE;
+    // 发布上传完成事件
     ltx_Topic_publish(&topic_hid_upload_over);
 }
 
 // 下行数据端点传输完成回调
 static void usbd_hid_down_callback(uint8_t ep, uint32_t nbytes){
-
-    if(nbytes > 0){
+    if(nbytes){
+        if(hid_down_buffer[0] >= 3 && hid_down_buffer[0] <= 12){
+            ffb_parse_data(hid_down_buffer, nbytes);
+        }
         switch(hid_down_buffer[0]){ // report id
-            #if 0
-            // PID标准：创建/修改效果
-            case 0x21:  // PID_SET_EFFECT
-                if (nbytes >= 3) {
-                    uint8_t effect_idx = hid_down_buffer[1];
-                    uint8_t effect_type = hid_down_buffer[2];  // 效果类型
-                    // 存储效果参数，等待后续的参数报告
-                    pending_effect_type[effect_idx] = effect_type;
-                }
-                break;
-            
-            // PID标准：设置常量力参数
-            case 0x73:  // PID_SET_CONSTANT
-                if (nbytes >= 4) {
-                    uint8_t effect_idx = hid_down_buffer[1];
-                    int16_t magnitude = (int16_t)((hid_down_buffer[2] << 8) | hid_down_buffer[3]);
-                    // 存储常量力幅值
-                    constant_magnitude[effect_idx] = magnitude;
-                }
-                break;
-            
-            // PID标准：设置周期性力参数（路面振动）
-            case 0x6E:  // PID_SET_PERIODIC
-                if (nbytes >= 8) {
-                    uint8_t effect_idx = hid_down_buffer[1];
-                    int16_t magnitude = (int16_t)((hid_down_buffer[2] << 8) | hid_down_buffer[3]);
-                    uint16_t period = (uint16_t)((hid_down_buffer[4] << 8) | hid_down_buffer[5]);
-                    uint8_t waveform = hid_down_buffer[7];  // 正弦/方波/三角
-                    // 存储周期性力参数
-                    periodic_magnitude[effect_idx] = magnitude;
-                    periodic_period[effect_idx] = period;
-                    periodic_waveform[effect_idx] = waveform;
-                }
-                break;
-            
-            // PID标准：设置条件力参数（弹簧力、阻尼力）
-            case 0x5F:  // PID_SET_CONDITION
-                if (nbytes >= 6) {
-                    uint8_t effect_idx = hid_down_buffer[1];
-                    int16_t cp_offset = (int16_t)((hid_down_buffer[2] << 8) | hid_down_buffer[3]);
-                    int16_t pos_coeff = (int16_t)((hid_down_buffer[4] << 8) | hid_down_buffer[5]);
-                    // 存储条件力参数
-                    condition_offset[effect_idx] = cp_offset;
-                    condition_pos_coeff[effect_idx] = pos_coeff;
-                }
-                break;
-            
-            // PID标准：启动/停止效果
-            case 0x77:  // PID_EFFECT_OPERATION
-                if (nbytes >= 4) {
-                    uint8_t effect_idx = hid_down_buffer[1];
-                    uint8_t loop_count = hid_down_buffer[2];  // 0=无限
-                    uint8_t operation = hid_down_buffer[3];   // 0=停止, 1=开始
-                    
-                    if (operation == 1) {
-                        start_effect(effect_idx, loop_count);
-                    } else {
-                        stop_effect(effect_idx);
-                    }
-                }
-                break;
-            
-            // PID标准：设备增益
-            case 0x7E:  // PID_DEVICE_GAIN
-                if (nbytes >= 3) {
-                    uint16_t gain = (uint16_t)((hid_down_buffer[1] << 8) | hid_down_buffer[2]);
-                    ff_global_gain = gain;  // 0-10000范围
-                }
-                break;
-            
-            #endif
-            // 自定义配置，上位机专用
-            case 0xF0:
-                if (nbytes >= 3) {
-                    uint8_t config_id = hid_down_buffer[1];
-                    // uint16_t config_value = (uint16_t)((hid_down_buffer[2] << 8) | hid_down_buffer[3]);
-                    // handle_custom_config(config_id, config_value);
-                }
-                break;
-
+            // case 3:
+            // case 4:
+            // case 5:
+            // case 6:
+            // case 7:
+            // case 8:
+            // case 9:
+            // case 10:
+            // case 11:
+            // case 12:
+            //     ffb_prase_data(hid_down_buffer, nbytes);
+            //     break;
             default:
+                // 未知报告ID，忽略
                 break;
+            // 自定义配置，预留给上位机用
+            // case 0xF0:
+            //     break;
         }
     }
-    #if 1
+    #if 0
+    static uint8_t print_count = 0;
+    if(print_count < 100){
+    print_count ++;
     LTX_LOG_FMT("L:%d,0x%x,%x,%x,%x,%x,%x,", nbytes,
                                                 hid_down_buffer[0],
                                                 hid_down_buffer[1],
@@ -1036,6 +976,7 @@ static void usbd_hid_down_callback(uint8_t ep, uint32_t nbytes){
                                                 hid_down_buffer[9],
                                                 hid_down_buffer[10],
                                                 hid_down_buffer[11]);
+    }
     #endif
     
     // 重新启动接收，准备下一次数据
@@ -1047,7 +988,6 @@ static struct usbd_endpoint hid_in_ep = {
     .ep_cb = usbd_hid_up_callback,
     .ep_addr = HID_INT_EP,
 };
-
 static struct usbd_endpoint hid_out_ep = {
     .ep_cb = usbd_hid_down_callback,
     .ep_addr = HID_OUT_EP
@@ -1055,7 +995,6 @@ static struct usbd_endpoint hid_out_ep = {
 
 
 #if 1
-// CherryUSB 新版回调签名：上层通过 usbd_hid_get_report/usbd_hid_set_report 实现
 void usbd_hid_get_report(uint8_t busid, uint8_t intf, uint8_t report_id, uint8_t report_type, uint8_t **data, uint32_t *len)
 {
     (void)busid;
@@ -1151,6 +1090,193 @@ void usbd_hid_set_report(uint8_t busid, uint8_t intf, uint8_t report_id, uint8_t
                     break;
             }
         }
+    }
+}
+#else
+// 另一个 ai 写的
+// 全局设备状态
+static struct {
+    uint8_t actuators_enabled;          // 执行器使能标志（1使能）
+    uint8_t device_paused;              // 设备暂停标志
+    uint8_t safety_switch;              // 安全开关（始终为1表示正常）
+    uint8_t actuator_power;             // 执行器供电（1正常）
+    uint8_t effect_playing;             // 是否有任何效果在播放（用于状态报告）
+    uint16_t global_gain;               // 全局增益（0~10000）
+    uint32_t effect_pool_size;          // RAM 池大小（返回给主机）
+    uint8_t max_simultaneous;           // 最大同时效果数
+    uint8_t device_managed_pool;        // 设备管理池标志（0）
+    uint8_t shared_parameter_blocks;    // 共享参数块标志（0）
+} g_ffb_state = {
+    .actuators_enabled = 1,             // 默认使能
+    .device_paused = 0,
+    .safety_switch = 1,
+    .actuator_power = 1,
+    .effect_playing = 0,
+    .global_gain = 10000,               // 最大增益
+    .effect_pool_size = 4096,           // 随便给一个值
+    .max_simultaneous = MAX_EFFECT_BLOCKS,
+    .device_managed_pool = 0,
+    .shared_parameter_blocks = 0,
+};
+
+// 效果块数组
+ffb_effect_block_t g_effect_blocks[MAX_EFFECT_BLOCKS];
+
+// 查找空闲效果块索引（1~MAX_EFFECT_BLOCKS），返回0表示无空闲
+static uint8_t find_free_effect_block(void) {
+    for (uint8_t i = 0; i < MAX_EFFECT_BLOCKS; i++) {
+        if (g_effect_blocks[i].state == EFFECT_STATE_FREE) {
+            return i + 1;  // 效果块索引从1开始
+        }
+    }
+    return 0;
+}
+
+// 根据索引获取效果块指针（索引1~MAX_EFFECT_BLOCKS）
+static ffb_effect_block_t *get_effect_block(uint8_t index) {
+    if (index == 0 || index > MAX_EFFECT_BLOCKS) return NULL;
+    return &g_effect_blocks[index - 1];
+}
+
+// 释放效果块
+static void free_effect_block(uint8_t index) {
+    ffb_effect_block_t *block = get_effect_block(index);
+    if (block) {
+        memset(block, 0, sizeof(ffb_effect_block_t));
+        block->state = EFFECT_STATE_FREE;
+    }
+    // 更新全局效果播放标志
+    g_ffb_state.effect_playing = 0;
+    for (int i = 0; i < MAX_EFFECT_BLOCKS; i++) {
+        if (g_effect_blocks[i].state == EFFECT_STATE_PLAYING) {
+            g_ffb_state.effect_playing = 1;
+            break;
+        }
+    }
+}
+
+void usbd_hid_get_report(uint8_t busid, uint8_t intf, uint8_t report_id, uint8_t report_type, uint8_t **data, uint32_t *len){
+    
+    static uint8_t report_buffer[64];  // 静态缓冲区，返回给主机
+
+    LTX_LOG_DEBG("GET report intf=%d id=0x%02x type=%d\n", intf, report_id, report_type);
+
+    // 只处理 Feature 报告和 Input 报告
+    if (report_type == HID_REPORT_INPUT || report_type == HID_REPORT_FEATURE) {
+        memset(report_buffer, 0, sizeof(report_buffer));
+
+        switch (report_id) {
+            case 2:  // PID State Report (Input, ID=2)
+                if (report_type == HID_REPORT_INPUT) {
+                    // 构建状态报告
+                    report_buffer[0] = 0x02;  // Report ID
+                    // 位域：bit0: Device Pause, bit1: Actuators Enabled, bit2: Safety Switch, bit3: Actuator Power, bit4: Effect Playing
+                    report_buffer[1] = (g_ffb_state.device_paused << 0) |
+                                       (g_ffb_state.actuators_enabled << 1) |
+                                       (g_ffb_state.safety_switch << 2) |
+                                       (g_ffb_state.actuator_power << 3) |
+                                       (g_ffb_state.effect_playing << 4);
+                    // 其余3位常量填充（描述符中有3位常量）
+                    report_buffer[1] |= 0xE0;  // 高3位为1（常量）
+                    *data = report_buffer;
+                    *len = 2;  // 报告长度（ID+1字节）
+                }
+                break;
+
+            case 13: // Create New Effect Report (Feature, ID=13)
+                if (report_type == HID_REPORT_FEATURE) {
+                    // 主机请求创建新效果时，需要返回一个空闲的效果块索引
+                    uint8_t effect_index = find_free_effect_block();
+                    if (effect_index == 0) {
+                        // 无空闲块，返回0表示失败
+                        effect_index = 0;
+                    }
+                    // 构建特征报告数据
+                    report_buffer[0] = 0x0D;  // Report ID
+                    // 效果类型（这里简单返回0，实际应根据主机请求的用法值确定，但CherryUSB中此回调无参数）
+                    // 实际上主机在Set Report中会发送类型，Get Report只是返回索引，这里简化处理
+                    report_buffer[1] = 0;      // 效果类型占位（主机通常忽略）
+                    // 字节计数（返回2个字节）
+                    report_buffer[2] = 0x02;   // 低8位
+                    report_buffer[3] = 0x00;   // 高8位
+                    *data = report_buffer;
+                    *len = 4;  // ID + 类型(1) + 计数(2)
+                }
+                break;
+
+            case 14: // PID Pool Report (Feature, ID=14)
+                if (report_type == HID_REPORT_FEATURE) {
+                    // 返回设备能力
+                    report_buffer[0] = 0x0E;  // Report ID
+                    // RAM Pool size (32位)
+                    report_buffer[1] = (g_ffb_state.effect_pool_size >> 0) & 0xFF;
+                    report_buffer[2] = (g_ffb_state.effect_pool_size >> 8) & 0xFF;
+                    report_buffer[3] = (g_ffb_state.effect_pool_size >> 16) & 0xFF;
+                    report_buffer[4] = (g_ffb_state.effect_pool_size >> 24) & 0xFF;
+                    // Simultaneous Effects Max (8位)
+                    report_buffer[5] = g_ffb_state.max_simultaneous;
+                    // Device Managed Pool (1位) 和 Shared Parameter Blocks (1位)
+                    report_buffer[6] = (g_ffb_state.device_managed_pool << 0) |
+                                       (g_ffb_state.shared_parameter_blocks << 1);
+                    // 剩余6位常量填充（描述符中定义为常量）
+                    report_buffer[6] |= 0xFC;
+                    *data = report_buffer;
+                    *len = 7;  // ID + 4 + 1 + 1
+                }
+                break;
+
+            default:
+                // 其他报告ID不支持，返回空
+                *data = NULL;
+                *len = 0;
+                break;
+        }
+    } else {
+        *data = NULL;
+        *len = 0;
+    }
+}
+void usbd_hid_set_report(uint8_t busid, uint8_t intf, uint8_t report_id, uint8_t report_type, uint8_t *report, uint32_t report_len){
+
+    LTX_LOG_DEBG("HID SET_REPORT: intf=%d id=0x%02x type=%d len=%d\n", intf, report_id, report_type, report_len);
+
+    // 只处理 Feature 报告
+    if (report_type != HID_REPORT_FEATURE) {
+        return;
+    }
+
+    switch (report_id) {
+        case 13: // Create New Effect Report (Feature)
+            // 主机请求创建一个新效果块，并指定效果类型
+            if (report_len >= 2) {
+                uint8_t effect_type = report[1];  // 报告第二个字节是效果类型
+                uint8_t effect_index = find_free_effect_block();
+                if (effect_index) {
+                    ffb_effect_block_t *block = get_effect_block(effect_index);
+                    block->state = EFFECT_STATE_CONFIGURED;
+                    block->type = effect_type;
+                    // 清空参数
+                    memset(&block->params, 0, sizeof(block->params));
+                    // 注意：主机不会在此报告里发送完整参数，后续会通过其他报告（Set Effect等）设置参数
+                }
+                // 如果无空闲块，主机会收到0索引（在后续Get Report中），这里不做返回
+            }
+            break;
+
+        case 14: // PID Pool Report (Feature)
+            // 主机可能会设置池参数（通常由设备返回，主机一般不写）
+            // 可忽略或更新设备能力
+            break;
+
+        case 0x12: // Block Load Report (Feature, ID=0x12)
+            // 主机请求加载效果块参数（实际上在Set Effect Report中已经处理，这里可选）
+            // 可根据需要实现，通常不需要额外处理
+            break;
+
+        default:
+            // 其他报告可能用于控制，例如PID Device Control等，但这些通常通过Output报告发送
+            // 如果主机通过Feature报告发送，可以在这里解析
+            break;
     }
 }
 #endif

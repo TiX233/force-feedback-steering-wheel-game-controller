@@ -102,14 +102,6 @@ struct hid_handle_up {
     uint32_t buttons;           // 32个按钮，每个bit代表一个按钮
 } __attribute__((packed));
 
-struct hid_handle_down {
-    int16_t f_const;        // 常量力
-    int16_t f_period;       // 周期力
-    int16_t f_condition;    // 弹簧力、阻尼力
-    int16_t gain;           // 增益
-    int16_t on_off;
-};
-
 #if 0
 struct hid_handle_feature {
     uint8_t config_id;       // 配置项 ID
@@ -119,7 +111,6 @@ struct hid_handle_feature {
 
 // 全局报告实例
 extern struct hid_handle_up handle_up;
-extern struct hid_handle_down handle_down;
 
 void hid_handle_init(void);
 int handle_upload(void);

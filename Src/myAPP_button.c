@@ -18,7 +18,7 @@ void script_cb_button_send(struct ltx_Script_stu *script);
 int myApp_button_init(struct ltx_App_stu *app){
 
     ltx_Script_init(&script_button_send, script_cb_button_send);
-    handle_wheel_set_max_turns(&handle_wheel_data, 5*100);
+    handle_wheel_set_max_turns(&handle_wheel_data, 1*100);
 
     return 0;
 }
@@ -108,31 +108,11 @@ void script_cb_button_send(struct ltx_Script_stu *script){
     // 右扳机
     handle_up.trigger_right = 0xFF - (handle_adc_row_data[ADC_TRIGGER_R] >> 4);
     // 方向盘
-    // handle_up.wheel = ((mag_encoder_wheel.data_buffer[0] & 0xFC)>>1) | (mag_encoder_wheel.data_buffer[1] << 7);
     handle_wheel_update(&handle_wheel_data, mag_encoder_wheel.data_row);
     handle_up.wheel = handle_wheel_get(&handle_wheel_data);
 
     // 发起 usb 发送
     int ret = handle_upload();
-
-    int32_t wheel_overrun = handle_wheel_get_overrun(&handle_wheel_data);
-    if(wheel_overrun > 0){ // 逆时针范围超限
-        // 产生顺时针方向的力矩
-        // motor_foc.target_I_q = 0.3f;
-        float I_q = 0.001f * wheel_overrun;
-        I_q = I_q > 0.7f ? 0.7f : I_q;
-        motor_foc.target_I_q = I_q;
-
-    }else if(wheel_overrun < 0){ // 顺时针范围超限
-        // 产生逆时针方向的力矩
-        // motor_foc.target_I_q = -0.3f;
-        float I_q = 0.001f * wheel_overrun;
-        I_q = I_q < -0.7f ? -0.7f : I_q;
-        motor_foc.target_I_q = I_q;
-    }else {
-        // 没有超限则关闭限位力矩
-        motor_foc.target_I_q = 0;
-    }
 
     // 发起下次 adc 扫描
     if(HAL_ADC_Start_DMA(&hadc2_handler, handle_adc_row_data, ADC_MAX_BIT) != HAL_OK){
