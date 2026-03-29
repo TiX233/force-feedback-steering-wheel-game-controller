@@ -467,12 +467,18 @@ void print_cb_adc1(void *param){
 // 手柄 adc 打印回调
 extern uint32_t handle_adc_row_data[5];
 void print_cb_adc2(void *param){
-    LTX_LOG_FMT("A2:%x %x %x %x %x\n", handle_adc_row_data[0],
+    LTX_LOG_FMT("A2:%d,%d,%d,%d,%d\n", handle_adc_row_data[0],
                                     handle_adc_row_data[1],
                                     handle_adc_row_data[2],
                                     handle_adc_row_data[3],
                                     handle_adc_row_data[4]);
     // LTX_LOG_FMT("A2:%d\n", ADC2->DR);
+}
+
+// 方向盘原始速度
+extern int16_t speed_now;
+void print_cb_wheel_speed(void *param){
+    LTX_LOG_FMT("SPD:%d\n", speed_now);
 }
 
 #if 0
@@ -558,6 +564,8 @@ struct {
     _P_DATA_INFO("rpm", &(script_speed.alarm_next_run.topic), print_cb_rpm),
     // 手柄 adc 原始值
     _P_DATA_INFO("adc2", &topic_hid_upload_over, print_cb_adc2),
+    // 方向盘速度
+    _P_DATA_INFO("wheel_speed", &topic_hid_upload_over, print_cb_wheel_speed),
 
     // 列表结尾项
     {.item_name = " ",},

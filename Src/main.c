@@ -116,7 +116,7 @@ int main(void){
     mcu_init_spi2();
     // mcu_init_i2c1();
     mcu_init_spi1();
-    mcu_init_usb();
+    mcu_init_usb(); // 实测发现开启 usb 后会对 adc 波形产生一点影响
 
     LTX_LOG_INFO("MCU init over at %dms\n", ltx_Sys_get_tick());
 

@@ -81,7 +81,13 @@ struct handle_pin_describe_stu handle_gear_ud[] = {
     [GEAR_PIN_D] = {GPIOB, GPIO_PIN_11},
 };
 
-uint32_t handle_adc_row_data[ADC_MAX_BIT];
+uint32_t handle_adc_row_data[ADC_MAX_BIT] = {[ADC_TRIGGER_L] = 0x7FF, [ADC_TRIGGER_R] = 0x7FF};
+uint16_t trigger_left_offset = 50;
+uint16_t trigger_left_max = 0x7FF;
+uint16_t trigger_left_min = 0x7FF - 100;
+uint16_t trigger_right_offset = 50;
+uint16_t trigger_right_max = 0x7FF;
+uint16_t trigger_right_min = 0x7FF - 100;
 
 // 发送按键等等信息给电脑的脚本
 void script_cb_button_send(struct ltx_Script_stu *script){
@@ -104,9 +110,43 @@ void script_cb_button_send(struct ltx_Script_stu *script){
     handle_up.joystick_x = handle_adc_row_data[ADC_JSTK_X] >> 4;
     handle_up.joystick_y = 0xFF - (handle_adc_row_data[ADC_JSTK_Y] >> 4);
     // 左扳机
-    handle_up.trigger_left = 0xFF - (handle_adc_row_data[ADC_TRIGGER_L] >> 4);
+        // handle_up.trigger_left = 0xFF - (uint8_t)(handle_adc_row_data[ADC_TRIGGER_L] >> 1);
+        // 较准
+        if(handle_adc_row_data[ADC_TRIGGER_L] > trigger_left_max){
+            trigger_left_max += handle_adc_row_data[ADC_TRIGGER_L];
+            trigger_left_max >>= 1;
+        }else if(handle_adc_row_data[ADC_TRIGGER_L] < trigger_left_min){
+            trigger_left_min += handle_adc_row_data[ADC_TRIGGER_L];
+            trigger_left_min >>= 1;
+        }
+        // 范围限定
+        if(handle_adc_row_data[ADC_TRIGGER_L] > trigger_left_max - trigger_left_offset){
+            handle_up.trigger_left = 0;
+        }else if(handle_adc_row_data[ADC_TRIGGER_L] < trigger_left_min){
+            handle_up.trigger_left = 0xFF;
+        }else {
+            handle_up.trigger_left = (uint8_t)((float)(trigger_left_max - trigger_left_offset - handle_adc_row_data[ADC_TRIGGER_L]) /
+                                                         (trigger_left_max - trigger_left_offset - trigger_left_min) * 0xFF);
+        }
     // 右扳机
-    handle_up.trigger_right = 0xFF - (handle_adc_row_data[ADC_TRIGGER_R] >> 4);
+        // handle_up.trigger_right = 0xFF - (uint8_t)(handle_adc_row_data[ADC_TRIGGER_R] >> 1);
+        // 较准
+        if(handle_adc_row_data[ADC_TRIGGER_R] > trigger_right_max){
+            trigger_right_max += handle_adc_row_data[ADC_TRIGGER_R];
+            trigger_right_max >>= 1;
+        }else if(handle_adc_row_data[ADC_TRIGGER_R] < trigger_right_min){
+            trigger_right_min += handle_adc_row_data[ADC_TRIGGER_R];
+            trigger_right_min >>= 1;
+        }
+        // 范围限定
+        if(handle_adc_row_data[ADC_TRIGGER_R] > trigger_right_max - trigger_right_offset){
+            handle_up.trigger_right = 0;
+        }else if(handle_adc_row_data[ADC_TRIGGER_R] < trigger_right_min){
+            handle_up.trigger_right = 0xFF;
+        }else {
+            handle_up.trigger_right = (uint8_t)((float)(trigger_right_max - trigger_right_offset - handle_adc_row_data[ADC_TRIGGER_R]) /
+                                                         (trigger_right_max - trigger_right_offset - trigger_right_min) * 0xFF);
+        }
     // 方向盘
     handle_wheel_update(&handle_wheel_data, mag_encoder_wheel.data_row);
     handle_up.wheel = handle_wheel_get(&handle_wheel_data);
@@ -121,7 +161,7 @@ void script_cb_button_send(struct ltx_Script_stu *script){
     // __HAL_DMA_DISABLE_IT(&hdma1ch1_handler, DMA_IT_HT);
     
     // usb 发送完成或者超时都会进入下次发起发送按键数据
-    ltx_Script_next_step_topic(script, 0, 10, &topic_hid_upload_over); // 超时时间 10ms
+    ltx_Script_next_step_topic(script, 0, 5, &topic_hid_upload_over); // 超时时间 5ms
 }
 
 // 获取挡位

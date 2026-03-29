@@ -52,6 +52,7 @@ struct ltx_Task_stu task_error_code = {.is_initialized = 0};
 int myApp_system_init(struct ltx_App_stu *app){
     // 创建心拍周期任务
     ltx_Task_init(&task_heart_beat, task_func_heart_beat, 1000, 0);
+    // 加入到 app 进行管理，这样就不用在 app pause 等操作内部显式操作 task，做 app pause 等操作时，会顺便操作下属 task
     ltx_Task_add_to_app(&task_heart_beat, app, "heart_beat");
 
     #if(_LTX_LOG_CHOOSE == _LTX_LOG_USE_RTT)

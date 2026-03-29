@@ -6,10 +6,12 @@
 #include "ltx_cmd.h"
 #include "ltx_script.h"
 #include "myAPP_motor.h"
+#include "mt6701.h"
 #include "myAPP_button.h"
 
 struct ltx_Script_stu script_ffb;
 void script_cb_ffb(struct ltx_Script_stu *script);
+static int32_t last_mag_value;
 
 int myApp_ffb_init(struct ltx_App_stu *app){
 
@@ -27,6 +29,7 @@ int myApp_ffb_pause(struct ltx_App_stu *app){
 
 int myApp_ffb_resume(struct ltx_App_stu *app){
 
+    last_mag_value = mag_encoder_wheel.data_row;
     ltx_Script_resume(&script_ffb, 0);
 
     return 0;
@@ -67,7 +70,7 @@ hid 最多支持 40 个，所以最大的情况下要准备一个大小为 40 �
 1、游戏比较老所以只支持流式控制，神力科莎不知道，欧卡2的路面颠簸增益条是灰色的，说明游戏是支持但认为设备不支持
 2、游戏不认识这款设备所以用最保守的方式输出，或者游戏与某些商业方向盘签约独占某些效果
 3、报告描述符有误
-4、get report 没写完整
+4、get report 没写完整，但是只抓取到一次 get report，windows 一般不会使用 get report，所以 get report 不太必要
 
 地平线5 只会开游戏的时候发几个 0xb 报文，不会输出力反馈数据，
 而且如果不是商业方向盘的 vid/pid 它甚至都不接纳输入
@@ -392,39 +395,43 @@ void ffb_parse_data(uint8_t *data, uint32_t len){
 }
 
 #define MAX_OUTPUT_IQ   0.7f
+int16_t speed_now;
+int16_t speed_limit = 30;
 
 void script_cb_ffb(struct ltx_Script_stu *script){
     float output_Iq = 0;
+    // 计算输出
     // if(ffb_flag_output_state){
         if(ffb_effect_pool[0].flag_enable){
             output_Iq = ((float)ffb_effect_pool[0].effect.constant.magnitude / 0xFFFF) * ((float)ffb_global_gain/0xff) * -MAX_OUTPUT_IQ;
         }
     // }
     
-    int32_t wheel_overrun = handle_wheel_get_overrun(&handle_wheel_data);
-#if 0
-    if(wheel_overrun > 0){ // 逆时针范围超限
-        // 产生顺时针方向的力矩
-        float I_q = 0.001f * wheel_overrun;
-        // I_q = I_q > 0.7f ? 0.7f : I_q;
-        output_Iq += I_q;
-
-    }else if(wheel_overrun < 0){ // 顺时针范围超限
-        // 产生逆时针方向的力矩
-        float I_q = 0.001f * wheel_overrun;
-        // I_q = I_q < -0.7f ? -0.7f : I_q;
-        output_Iq += I_q;
-    }else {
-        // 没有超限则关闭限位力矩
-        // output_Iq += 0;
+    // 限速，减小方向盘脱手后的震荡，因为小电机阻力比较小
+    speed_now = last_mag_value - mag_encoder_wheel.data_row;
+    last_mag_value = mag_encoder_wheel.data_row;
+    if(speed_now > 0x1FFF){
+        speed_now -= 0x3FFF;
+    }else if(speed_now < -0x1FFF){
+        speed_now += 0x3FFF;
     }
-#endif
+
+    if(speed_now > speed_limit || speed_now < -speed_limit){
+        // output_Iq *= 0.5f;
+        output_Iq -= speed_now*0.0015f;
+    }
+
+
+    // 判断是否超出限位
+    int32_t wheel_overrun = handle_wheel_get_overrun(&handle_wheel_data);
     output_Iq += 0.001f * wheel_overrun;
 
+    // 限制输出
     output_Iq = output_Iq > MAX_OUTPUT_IQ ? MAX_OUTPUT_IQ : (output_Iq < -MAX_OUTPUT_IQ ? -MAX_OUTPUT_IQ : output_Iq);
-
+    // 输出
     motor_foc.target_I_q = output_Iq;
 
+    // 1ms 后再次运行
     ltx_Script_next_step_delay(script, 0, 1);
 }
 

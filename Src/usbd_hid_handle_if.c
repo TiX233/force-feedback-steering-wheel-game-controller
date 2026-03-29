@@ -15,7 +15,7 @@
 #define HID_OUT_EP_INTERVAL 2       // 下行端口轮询间隔，单位毫秒
 
 // 如果需要修改 hid_handle_report_desc 报告描述符，那么还需要变更 vid/pid 才能让 windows 重新发起识别，否则不会有效
-// 填什么都行反正，只要不是别人的商用 vid/pid
+// 填什么都行反正，只要不是别人的商用 vid/pid，以及不要是你电脑连接过的设备的 vid，不然 windows 会偷懒不匹配驱动，导致游戏不识别
 #define USBD_VID            0x2568
 #define USBD_PID            0x2333
 
@@ -797,6 +797,20 @@ static const uint8_t hid_handle_report_desc[] = {
     0x95, 0x01,        //   REPORT_COUNT (1)
     0xB1, 0x03,        //   FEATURE (Constant)
     0xC0,              // END_COLLECTION
+#if 1
+    // ========== 自定义配置报告（上位机专用，ID=0xF0）==========
+    0x05, 0x0F,        // USAGE_PAGE (Physical Interface Device)
+    0x09, 0xFF,        // USAGE (Vendor Defined)
+    0xA1, 0x02,        // COLLECTION (Logical)
+    0x85, 0xF0,        //   REPORT_ID (0xF0)
+    0x09, 0xFF,        //   USAGE (Vendor Defined)
+    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
+    0x26, 0xFF, 0x00,  //   LOGICAL_MAXIMUM (255)
+    0x75, 0x08,        //   REPORT_SIZE (8)
+    0x95, 0x08,        //   REPORT_COUNT (8)
+    0x91, 0x02,        //   OUTPUT (Data,Var,Abs)
+    0xC0,              // END_COLLECTION
+#endif
 
     // ---------- 应用集合结束 ----------
     0xC0               // END_COLLECTION (Application)
@@ -806,6 +820,9 @@ static const uint8_t hid_handle_report_desc[] = {
 
 /*!< global descriptor */
 uint8_t hid_descriptor[] = {
+    // https://www.usb.org/defined-class-codes
+    // bDeviceClass, bDeviceSubClass, bDeviceProtocol，openffb 填的是 0，2，1，但是似乎如果 class 是 0 后面都不会有效
+    // openffb 标注的是 misc，那么照理他们应该填 ef，2，1，不知道为什么
     USB_DEVICE_DESCRIPTOR_INIT(USB_2_0, 0x00, 0x00, 0x00, USBD_VID, USBD_PID, 0x0002, 0x01),
     // 配置描述符
     USB_CONFIG_DESCRIPTOR_INIT(USB_HID_CONFIG_DESC_SIZ, 0x01, 0x01, USB_CONFIG_BUS_POWERED, USBD_MAX_POWER),
@@ -864,7 +881,7 @@ uint8_t hid_descriptor[] = {
     ///////////////////////////////////////
     /// string2 descriptor
     ///////////////////////////////////////
-    0x1C,                       /* bLength */
+    0x1E,                       /* bLength */
     USB_DESCRIPTOR_TYPE_STRING, /* bDescriptorType */
     'T', 0x00,                  /* wcChar0 */
     'i', 0x00,                  /* wcChar1 */
@@ -873,27 +890,26 @@ uint8_t hid_descriptor[] = {
     'F', 0x00,                  /* wcChar4 */
     'F', 0x00,                  /* wcChar5 */
     'B', 0x00,                  /* wcChar6 */
-    'H', 0x00,                  /* wcChar7 */
-    'a', 0x00,                  /* wcChar8 */
-    'n', 0x00,                  /* wcChar9 */
-    'd', 0x00,                  /* wcChar10 */
-    'l', 0x00,                  /* wcChar11 */
-    'e', 0x00,                  /* wcChar12 */
+    ' ', 0x00,                  /* wcChar7 */
+    'H', 0x00,                  /* wcChar8 */
+    'a', 0x00,                  /* wcChar9 */
+    'n', 0x00,                  /* wcChar10 */
+    'd', 0x00,                  /* wcChar11 */
+    'l', 0x00,                  /* wcChar12 */
+    'e', 0x00,                  /* wcChar13 */
     ///////////////////////////////////////
     /// string3 descriptor
     ///////////////////////////////////////
-    0x16,                       /* bLength */
+    0x12,                       /* bLength */
     USB_DESCRIPTOR_TYPE_STRING, /* bDescriptorType */
     '2', 0x00,                  /* wcChar0 */
     '0', 0x00,                  /* wcChar1 */
     '2', 0x00,                  /* wcChar2 */
     '6', 0x00,                  /* wcChar3 */
-    '1', 0x00,                  /* wcChar4 */
-    '2', 0x00,                  /* wcChar5 */
-    '3', 0x00,                  /* wcChar6 */
-    '4', 0x00,                  /* wcChar7 */
-    '5', 0x00,                  /* wcChar8 */
-    '7', 0x00,                  /* wcChar9 */
+    '0', 0x00,                  /* wcChar4 */
+    '3', 0x00,                  /* wcChar5 */
+    '2', 0x00,                  /* wcChar6 */
+    '6', 0x00,                  /* wcChar7 */
 #ifdef CONFIG_USB_HS
     ///////////////////////////////////////
     /// device qualifier descriptor
@@ -955,8 +971,28 @@ static void usbd_hid_down_callback(uint8_t ep, uint32_t nbytes){
                 // 未知报告ID，忽略
                 break;
             // 自定义配置，预留给上位机用
-            // case 0xF0:
-            //     break;
+            case 0xF0:
+                switch(hid_down_buffer[1]){
+                    case 0x01: // 设置当前方向盘位置为中点
+                        LTX_LOG_DEBG("USB Set mid.\n");
+                        handle_wheel_set_zero(&handle_wheel_data);
+                        break;
+                        
+                    case 0x02: // 设置单边最大圈数
+                        if(hid_down_buffer[2] == 0 && hid_down_buffer[3] == 0){
+                            hid_down_buffer[3] = 10;
+                        }
+                        LTX_LOG_DEBG("USB Set max turns: %d.%02d\n", hid_down_buffer[2], hid_down_buffer[3]);
+                        int32_t usb_set_max_turns = hid_down_buffer[2]*100 + hid_down_buffer[3];
+                        handle_wheel_set_max_turns(&handle_wheel_data, usb_set_max_turns);
+                        
+                        break;
+
+                    default:
+                        LTX_LOG_WARN("Unknown USB Head: 0x%x\n", hid_down_buffer[1]);
+                        break;
+                }
+                break;
         }
     }
     #if 0
@@ -994,7 +1030,7 @@ static struct usbd_endpoint hid_out_ep = {
 };
 
 
-#if 1
+#if 0
 void usbd_hid_get_report(uint8_t busid, uint8_t intf, uint8_t report_id, uint8_t report_type, uint8_t **data, uint32_t *len)
 {
     (void)busid;

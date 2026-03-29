@@ -58,11 +58,17 @@ struct ltx_App_stu app_led = {
     .next = NULL,
 };
 
+ws2812_Color_stu led_blink_color = {
+    .red = 20,
+    .green = 0,
+    .blue = 0,
+};
+
 void script_cb_led_anime_blink(struct ltx_Script_stu *script){
     static uint8_t flag_led_status = 0;
 
     if(flag_led_status){
-        ws2812_set_1_color(&my_led, 0, 0, 0, 20);
+        ws2812_set_1_color(&my_led, 0, led_blink_color.red, led_blink_color.green, led_blink_color.blue);
     }else {
         ws2812_set_1_color(&my_led, 0, 0, 0, 0);
     }
@@ -70,4 +76,10 @@ void script_cb_led_anime_blink(struct ltx_Script_stu *script){
 
     ws2812_refresh_dma(&my_led);
     ltx_Script_next_step_delay(script, 0, 500);
+}
+
+void led_set_blink_color(uint8_t r, uint8_t g, uint8_t b){
+    led_blink_color.red = r;
+    led_blink_color.green = g;
+    led_blink_color.blue = b;
 }

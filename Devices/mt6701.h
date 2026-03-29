@@ -1,7 +1,7 @@
 /**
  * @file mt6701.h
  * @author realTiX
- * @brief 用于 mt6701 磁编码器
+ * @brief 用于 mt6701 磁编码器，i2c 速度不能超过 1000k，spi 速度不能超过 15M
  * @version 0.3
  * @date 2026-02-25 (0.1, 初步完成)
  *       2026-03-08 (0.2, 增加弧度偏置功能)
@@ -15,9 +15,10 @@
 
 #include "main.h"
 
+// 不是说 spi 只能使用 16bit 模式，而是使用 spi 情况下如果要用 16bit 就开这个宏
 #define MT6701_USESPI_16BIT
 
-// 默认设备地址
+// i2c 默认设备地址
 #define MT6701_DEFAULT_ADDR     (0x06 << 1)
 
 struct mt6701_stu {
@@ -26,6 +27,7 @@ struct mt6701_stu {
     uint16_t data_row; // 原始数据
     uint8_t data_buffer[3];
 
+    // 以读写寄存器的形式进行封装，兼顾 i2c 与 spi
     // void (*write_reg)(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num);
     void (*read_reg)(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num);
     void (*read_reg_dma)(struct mt6701_stu *mt, uint8_t reg_addr, uint8_t *reg_buffer, uint8_t reg_num);

@@ -27,8 +27,12 @@ void eventg_cb_device_init_over(struct ltx_Event_group_stu *event);
 void my_led_cb_send_data(struct ws2812_stu *led, uint8_t *buffer, uint16_t size);
 void my_led_cb_send_data_dma(struct ws2812_stu *led, uint8_t *buffer, uint16_t size);
 
-// 零点对齐脚本
+// 零点对齐脚本回调
 void script_cb_zero_align(struct ltx_Script_stu *script);
+
+// 电机初始化脚本回调
+void script_cb_motor_init(struct ltx_Script_stu *script);
+
 
 // ws2812 对象
 uint8_t my_led_display_buffer[WS2812_BUFFER_SIZE(1)];
@@ -51,18 +55,26 @@ struct ltx_Script_stu script_led_init;
 
 // 计算每个极对平均偏差对齐电角度与机械角度的脚本
 struct ltx_Script_stu script_zero_align;
+// 零点对齐完成事件话题
+struct ltx_Topic_stu topic_zero_align_over = _LTX_TOPIC_DEAFULT_CONFIG(topic_zero_align_over);
+
+// 电机初始化脚本
+struct ltx_Script_stu script_motor_init;
 
 
 // app 相关
 int myAPP_device_init_init(struct ltx_App_stu *app){
     // 创建指示灯初始脚本
     ltx_Script_init(&script_led_init, script_cb_led_init);
+    // 初始化零点较准脚本
     ltx_Script_init(&script_zero_align, script_cb_zero_align);
+    // 创建电机初始化脚本
+    ltx_Script_init(&script_motor_init, script_cb_motor_init);
 
     // 创建所有外部硬件初始化完成事件组
-    ltx_Event_group_init(&eventg_device_init_over, eventg_cb_device_init_over, EVENT_INIT_LED_OVER \
-                                                                                \
-                                                                                , 10000); // 10s 超时时间
+    ltx_Event_group_init(&eventg_device_init_over, eventg_cb_device_init_over, EVENT_INIT_LED_OVER |\
+                                                                               EVENT_INIT_MOTOR_OVER \
+                                                                               , 0); // 超时时间设置为 TickType_t 最大值
 
     // 发起 adc1
     if(HAL_ADCEx_InjectedStart_IT(&hadc1_handler) != HAL_OK)
@@ -74,6 +86,7 @@ int myAPP_device_init_init(struct ltx_App_stu *app){
 int myAPP_device_init_pause(struct ltx_App_stu *app){
 
     ltx_Script_pause(&script_led_init);
+    ltx_Script_pause(&script_motor_init);
 
     return 0;
 }
@@ -81,6 +94,7 @@ int myAPP_device_init_pause(struct ltx_App_stu *app){
 int myAPP_device_init_resume(struct ltx_App_stu *app){
 
     ltx_Script_resume(&script_led_init, 0);
+    ltx_Script_resume(&script_motor_init, 0);
 
     return 0;
 }
@@ -88,6 +102,8 @@ int myAPP_device_init_resume(struct ltx_App_stu *app){
 int myAPP_device_init_destroy(struct ltx_App_stu *app){
 
     ltx_Script_pause(&script_led_init);
+    ltx_Script_pause(&script_motor_init);
+    ltx_Script_pause(&script_zero_align);
 
     ltx_Event_group_cancel(&eventg_device_init_over);
 
@@ -158,6 +174,149 @@ void script_cb_led_init(struct ltx_Script_stu *script){
             break;
     }
 
+}
+
+extern uint32_t handle_adc_row_data[ADC_MAX_BIT];
+uint32_t motor_sound_tickcount = 0;
+// uint32_t motor_sound_tickreload = 20000/1000/2; // 1khz 频率声音
+#define motor_sound_duty 0.3f
+// 电机初始化脚本回调
+void script_cb_motor_init(struct ltx_Script_stu *script){
+    static uint8_t flag_ab = 0;
+    static uint8_t beep_count = 0;
+
+    switch(script->step_now){
+        case 0:
+            // 准备初始化电机
+            led_set_blink_color(0, 20, 0); // 绿灯闪烁
+            ltx_Script_next_step_delay(script, 1, 100);
+            break;
+
+        case 1:
+            // 等待按下菜单键，按下后进入电机初始化
+            if(HANDLE_IS_BTN_PRESS(BTN_MENU)){
+                led_set_blink_color(20, 20, 0); // 黄灯闪烁
+                ltx_Script_resume(&script_zero_align, 500); // 500ms 后开始执行对齐算法
+                ltx_Script_next_step_topic(script, 2, 0, &topic_zero_align_over); // 以最大时间等待对齐完成
+            }else {
+                ltx_Script_next_step_delay(script, 1, 20);
+            }
+
+            break;
+
+        case 2:
+            if(ltx_Script_get_triger_type(script) == SC_TRIGER_TIMEOUT){ // 等待对齐完成事件超时
+                led_set_blink_color(20, 0, 0); // 红灯闪烁
+                LTX_LOG_ERRO("Zero align Failed!\n");
+                ltx_Script_pause(&script_zero_align);
+                ltx_Script_next_step_over(script);
+                return ;
+            }
+            // 对齐完成，进入发声提示
+            motor_foc.flag_is_inited = 0;
+            ltx_bldc_set_duty_u(motor_foc, 0);
+            ltx_bldc_set_duty_v(motor_foc, 0);
+            ltx_bldc_set_duty_w(motor_foc, 0);
+            ltx_Script_next_step_topic(script, 3, 0, &topic_adc1_update);
+            led_set_blink_color(20, 0, 20); // 紫灯闪烁
+
+            break;
+#if 0
+        case 3:
+            if(motor_sound_tickcount++ > 20000/5){ // 播放声音超过 200ms
+                ltx_bldc_set_duty_u(motor_foc, 0);
+                ltx_bldc_set_duty_v(motor_foc, 0);
+                ltx_bldc_set_duty_w(motor_foc, 0);
+                if(beep_count ++){ // 响过两次
+                    // 发起 adc 扫描
+                    if(HAL_ADC_Start_DMA(&hadc2_handler, handle_adc_row_data, ADC_MAX_BIT) != HAL_OK){
+                        led_set_blink_color(20, 0, 0); // 红灯闪烁
+                        LTX_LOG_ERRO("ADC2 ERR\n");
+                        ltx_Script_next_step_over(script);
+                        return ;
+                    }
+                    // 进入方向盘中点和限位设置
+                    motor_foc.flag_is_inited = 1;
+                    ltx_Script_next_step_delay(script, 4, 20);
+                }else {
+                    ltx_Script_next_step_delay(script, 3, 200);
+                    motor_sound_tickcount = 0;
+                }
+                return ;
+            }
+
+            if(motor_sound_tickcount % motor_sound_tickreload == 0){
+                if(flag_ab){
+                    ltx_bldc_set_duty_u(motor_foc, motor_sound_duty);
+                    ltx_bldc_set_duty_v(motor_foc, 0);
+                    flag_ab = 0;
+                }else {
+                    ltx_bldc_set_duty_u(motor_foc, 0);
+                    ltx_bldc_set_duty_v(motor_foc, motor_sound_duty);
+                    flag_ab = 1;
+                }
+            }
+
+            ltx_Script_next_step_topic(script, 3, 1, &topic_adc1_update);
+            break;
+#endif
+        case 3:
+            if(motor_sound_tickcount++ > 400){ // 播放声音超过 200ms
+                ltx_bldc_set_duty_u(motor_foc, 0);
+                ltx_bldc_set_duty_v(motor_foc, 0);
+                ltx_bldc_set_duty_w(motor_foc, 0);
+                if(beep_count ++){ // 响过两次
+                    // 发起 adc 扫描
+                    if(HAL_ADC_Start_DMA(&hadc2_handler, handle_adc_row_data, ADC_MAX_BIT) != HAL_OK){
+                        led_set_blink_color(20, 0, 0); // 红灯闪烁
+                        LTX_LOG_ERRO("ADC2 ERR\n");
+                        ltx_Script_next_step_over(script);
+                        return ;
+                    }
+                    // 进入方向盘中点和限位设置
+                    motor_foc.flag_is_inited = 1;
+                    ltx_Script_next_step_delay(script, 4, 20);
+                }else {
+                    ltx_Script_next_step_delay(script, 3, 200);
+                    motor_sound_tickcount = 0;
+                }
+                return ;
+            }
+
+            if(flag_ab){
+                ltx_bldc_set_duty_u(motor_foc, motor_sound_duty);
+                ltx_bldc_set_duty_v(motor_foc, 0);
+                flag_ab = 0;
+            }else {
+                ltx_bldc_set_duty_u(motor_foc, 0);
+                ltx_bldc_set_duty_v(motor_foc, motor_sound_duty);
+                flag_ab = 1;
+            }
+
+            ltx_Script_next_step_delay(script, 3, 1);
+
+            break;
+
+        case 4:
+            // 按下菜单键且挂入挡位才算
+            if(HANDLE_IS_BTN_PRESS(BTN_MENU)){
+                handle_gear_e gear_now = handle_gear_get();
+                if(gear_now != GEAR_NONE){
+                    handle_wheel_update(&handle_wheel_data, mag_encoder_wheel.data_row);
+                    handle_wheel_set_zero(&handle_wheel_data); // 设置当前位置为方向盘中点
+                    handle_wheel_set_max_turns(&handle_wheel_data, 25*gear_now); // 设置单边最大圈数，0.25*挡位
+                    led_set_blink_color(0, 0, 20); // 蓝灯闪烁
+                    // 初始化完成
+                    ltx_Event_group_publish(&eventg_device_init_over, EVENT_INIT_MOTOR_OVER);
+                    ltx_Script_next_step_over(script);
+                    return ;
+                }
+            }
+            HAL_ADC_Start_DMA(&hadc2_handler, handle_adc_row_data, ADC_MAX_BIT);
+            ltx_Script_next_step_delay(script, 4, 20);
+
+            break;
+    }
 }
 
 
@@ -458,6 +617,7 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
             // 结束脚本
             ltx_Script_next_step_over(script);
             LTX_LOG_INFO("Init motor zero align success.\n");
+            ltx_Topic_publish(&topic_zero_align_over); // 发布对齐完成事件
             motor_foc.flag_is_inited = 1;
 
             break;
@@ -494,10 +654,10 @@ void eventg_cb_device_init_over(struct ltx_Event_group_stu *eventg){
     // ltx_App_resume(&app_motor);
 
     ltx_App_init(&app_button);
-    // ltx_App_resume(&app_button);
+    ltx_App_resume(&app_button);
 
     ltx_App_init(&app_ffb);
-    // ltx_App_resume(&app_ffb);
+    ltx_App_resume(&app_ffb);
 }
 
 
