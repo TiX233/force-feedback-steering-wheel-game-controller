@@ -226,7 +226,7 @@ void _SYS_ERROR(uint32_t code, const char *msg){
     ltx_Topic_publish(&topic_sys_error);
 }
 
-
+#if(_LTX_LOG_CHOOSE == _LTX_LOG_USE_DMA)
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart){
     ltx_Log_dma_send_over_handler();
 }
@@ -263,3 +263,5 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
     // 
     // LTX_LOG_STR("T1\n");
 }
+
+#endif

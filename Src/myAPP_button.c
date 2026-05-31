@@ -18,7 +18,7 @@ void script_cb_button_send(struct ltx_Script_stu *script);
 int myApp_button_init(struct ltx_App_stu *app){
 
     ltx_Script_init(&script_button_send, script_cb_button_send);
-    handle_wheel_set_max_turns(&handle_wheel_data, 1*100);
+    // handle_wheel_set_max_turns(&handle_wheel_data, 1*100);
 
     return 0;
 }
@@ -192,6 +192,8 @@ handle_gear_e handle_gear_get(void){
 
 
 struct handle_wheel_stu handle_wheel_data = {
+    .max_turns_x100 = 1*100,
+    .max_counts = 0x4000,
     .encoder_max = 0x3FFF,
 };
 // 设置当前方向盘位置为中点

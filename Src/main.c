@@ -447,7 +447,7 @@ static void mcu_init_adc2(void){
     // 摇杆左右
     adc_channel_config.Channel      = ADC_CHANNEL_0;
     adc_channel_config.Rank         = ADC_REGULAR_RANK_1;
-    adc_channel_config.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+    adc_channel_config.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
     
     if (HAL_ADC_ConfigChannel(&hadc2_handler, &adc_channel_config) != HAL_OK){
         while(1){

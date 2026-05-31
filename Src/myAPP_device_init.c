@@ -12,10 +12,13 @@
 #include "mt6701.h"
 #include "myAPP_button.h"
 #include "myAPP_ffb.h"
+#include "handle_config.h"
 
 // 所需初始化外部硬件完成事件
 #define EVENT_INIT_LED_OVER                 0x0001
 #define EVENT_INIT_MOTOR_OVER               0x0002
+
+#define DEFAULT_BRIGHTNESS                  50
 
 // 函数声明
 // led 初始化脚本回调
@@ -44,7 +47,7 @@ struct ws2812_stu my_led = {
 };
 
 // 组件全局变量
-// dma 发送完成话题
+// led dma 发送完成话题
 struct ltx_Topic_stu topic_spi_tx_over = _LTX_TOPIC_DEAFULT_CONFIG(topic_spi_tx_over);
 
 // 所有外部硬件初始化完成事件组
@@ -61,9 +64,20 @@ struct ltx_Topic_stu topic_zero_align_over = _LTX_TOPIC_DEAFULT_CONFIG(topic_zer
 // 电机初始化脚本
 struct ltx_Script_stu script_motor_init;
 
+uint8_t flag_is_no_config = 0;
 
 // app 相关
 int myAPP_device_init_init(struct ltx_App_stu *app){
+
+    // 读取 falsh 中的手柄配置
+    hcfg_read_from_flash();
+    // 检查配置是否可用
+    uint8_t ret_val = hcfg_check();
+    if(hcfg_check()){
+        LTX_LOG_INFO("No useable config: %d\n", ret_val);
+        flag_is_no_config = 1;
+    }
+
     // 创建指示灯初始脚本
     ltx_Script_init(&script_led_init, script_cb_led_init);
     // 初始化零点较准脚本
@@ -94,7 +108,24 @@ int myAPP_device_init_pause(struct ltx_App_stu *app){
 int myAPP_device_init_resume(struct ltx_App_stu *app){
 
     ltx_Script_resume(&script_led_init, 0);
-    ltx_Script_resume(&script_motor_init, 0);
+    if(flag_is_no_config){
+    // if(1){
+        // 如果没有配置，则初始化
+        ltx_Script_resume(&script_motor_init, 0);
+    }else {
+        // 有配置则读取并应用
+        // 应用磁编码器偏置
+        mt6701_set_rad_offset(&mag_encoder_wheel, _cfg_of_handle.wheel_motor_accurate_value.f/7);
+        motor_foc.flag_is_inited = 1;
+        HAL_Delay(2);
+        // 应用圈数
+        handle_wheel_update(&handle_wheel_data, mag_encoder_wheel.data_row);
+        handle_wheel_set_zero(&handle_wheel_data); // 设置当前位置为方向盘中点
+        handle_wheel_set_max_turns(&handle_wheel_data, _cfg_of_handle.wheel_max_turn_x100); // 设置单边最大圈数
+        led_set_blink_color(0, 0, DEFAULT_BRIGHTNESS); // 蓝灯闪烁
+        // 初始化完成
+        ltx_Event_group_publish(&eventg_device_init_over, EVENT_INIT_MOTOR_OVER);
+    }
 
     return 0;
 }
@@ -133,7 +164,7 @@ void script_cb_led_init(struct ltx_Script_stu *script){
     // }
     switch(script->step_now){
         case 0: // 清除 led 显示
-            ws2812_set_1_color(&my_led, 0, 20, 0, 0);
+            ws2812_set_1_color(&my_led, 0, DEFAULT_BRIGHTNESS, 0, 0);
             ws2812_refresh_dma(&my_led);
 
             ltx_Script_next_step_topic(script, 1, 10, &topic_spi_tx_over); // spi 发送完成事件触发或者超时 10ms 后进入下一步
@@ -188,14 +219,14 @@ void script_cb_motor_init(struct ltx_Script_stu *script){
     switch(script->step_now){
         case 0:
             // 准备初始化电机
-            led_set_blink_color(0, 20, 0); // 绿灯闪烁
+            led_set_blink_color(0, DEFAULT_BRIGHTNESS, 0); // 绿灯闪烁
             ltx_Script_next_step_delay(script, 1, 100);
             break;
 
         case 1:
             // 等待按下菜单键，按下后进入电机初始化
             if(HANDLE_IS_BTN_PRESS(BTN_MENU)){
-                led_set_blink_color(20, 20, 0); // 黄灯闪烁
+                led_set_blink_color(DEFAULT_BRIGHTNESS, DEFAULT_BRIGHTNESS, 0); // 黄灯闪烁
                 ltx_Script_resume(&script_zero_align, 500); // 500ms 后开始执行对齐算法
                 ltx_Script_next_step_topic(script, 2, 0, &topic_zero_align_over); // 以最大时间等待对齐完成
             }else {
@@ -206,7 +237,7 @@ void script_cb_motor_init(struct ltx_Script_stu *script){
 
         case 2:
             if(ltx_Script_get_triger_type(script) == SC_TRIGER_TIMEOUT){ // 等待对齐完成事件超时
-                led_set_blink_color(20, 0, 0); // 红灯闪烁
+                led_set_blink_color(DEFAULT_BRIGHTNESS, 0, 0); // 红灯闪烁
                 LTX_LOG_ERRO("Zero align Failed!\n");
                 ltx_Script_pause(&script_zero_align);
                 ltx_Script_next_step_over(script);
@@ -218,7 +249,7 @@ void script_cb_motor_init(struct ltx_Script_stu *script){
             ltx_bldc_set_duty_v(motor_foc, 0);
             ltx_bldc_set_duty_w(motor_foc, 0);
             ltx_Script_next_step_topic(script, 3, 0, &topic_adc1_update);
-            led_set_blink_color(20, 0, 20); // 紫灯闪烁
+            led_set_blink_color(DEFAULT_BRIGHTNESS, 0, DEFAULT_BRIGHTNESS); // 紫灯闪烁
 
             break;
 #if 0
@@ -230,7 +261,7 @@ void script_cb_motor_init(struct ltx_Script_stu *script){
                 if(beep_count ++){ // 响过两次
                     // 发起 adc 扫描
                     if(HAL_ADC_Start_DMA(&hadc2_handler, handle_adc_row_data, ADC_MAX_BIT) != HAL_OK){
-                        led_set_blink_color(20, 0, 0); // 红灯闪烁
+                        led_set_blink_color(DEFAULT_BRIGHTNESS, 0, 0); // 红灯闪烁
                         LTX_LOG_ERRO("ADC2 ERR\n");
                         ltx_Script_next_step_over(script);
                         return ;
@@ -268,7 +299,7 @@ void script_cb_motor_init(struct ltx_Script_stu *script){
                 if(beep_count ++){ // 响过两次
                     // 发起 adc 扫描
                     if(HAL_ADC_Start_DMA(&hadc2_handler, handle_adc_row_data, ADC_MAX_BIT) != HAL_OK){
-                        led_set_blink_color(20, 0, 0); // 红灯闪烁
+                        led_set_blink_color(DEFAULT_BRIGHTNESS, 0, 0); // 红灯闪烁
                         LTX_LOG_ERRO("ADC2 ERR\n");
                         ltx_Script_next_step_over(script);
                         return ;
@@ -305,7 +336,9 @@ void script_cb_motor_init(struct ltx_Script_stu *script){
                     handle_wheel_update(&handle_wheel_data, mag_encoder_wheel.data_row);
                     handle_wheel_set_zero(&handle_wheel_data); // 设置当前位置为方向盘中点
                     handle_wheel_set_max_turns(&handle_wheel_data, 25*gear_now); // 设置单边最大圈数，0.25*挡位
-                    led_set_blink_color(0, 0, 20); // 蓝灯闪烁
+                    // 保存到配置缓存
+                    _cfg_of_handle.wheel_max_turn_x100 = 25*gear_now;
+                    led_set_blink_color(0, 0, DEFAULT_BRIGHTNESS); // 蓝灯闪烁
                     // 初始化完成
                     ltx_Event_group_publish(&eventg_device_init_over, EVENT_INIT_MOTOR_OVER);
                     ltx_Script_next_step_over(script);
@@ -509,6 +542,8 @@ void script_cb_zero_align(struct ltx_Script_stu *script){
                         LTX_LOG_INFO("Cut off motor...\n");
                         // 应用到磁编码器偏置
                         mt6701_set_rad_offset(&mag_encoder_wheel, align_rad_average/MOTOR_POLE_PAIRS);
+                        // 保存到配置缓存
+                        _cfg_of_handle.wheel_motor_accurate_value.f = align_rad_average;
                         // 准备逐渐减弱输出，结束脚本
                         ltx_Script_next_step_delay(script, 11, 0);
 
@@ -645,6 +680,14 @@ void eventg_cb_device_init_over(struct ltx_Event_group_stu *eventg){
     LTX_LOG_INFO("All devices init over.\n");
     // 关闭 device_init app
     ltx_App_destroy(&app_device_init);
+
+    // 如果有新配置则保存到 flash
+    if(flag_is_no_config){
+        LTX_LOG_INFO("Save new config\n");
+        hcfg_pack();
+        // hcfg_erase();
+        hcfg_write_into_flash(&_cfg_of_handle);
+    }
 
     // 启动业务 app
     // ltx_App_init(&app_led);
